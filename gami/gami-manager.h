@@ -168,6 +168,7 @@ GType gami_module_load_type_get_type (void);
 
 /**
  * GamiManager:
+ * @parent_instance: #GObject parent instance
  * @api_version: AMI API version string as sent by Asterisk
  * @api_major: Major number of AMI API version
  * @api_minor: Minor number of AMI API version
@@ -193,7 +194,7 @@ struct _GamiManagerClass
 
 struct _GamiManager
 {
-	GObject parent_instance;
+    GObject parent_instance;
 
     const gchar *api_version;
     guint  api_major;
