@@ -56,4 +56,5 @@ gami-1.0.pc
 gami/Makefile
 po/Makefile.in
 docs/reference/Makefile
+docs/reference/version.xml
 ])

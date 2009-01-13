@@ -1,14 +1,16 @@
+<INCLUDE>gami.h</INCLUDE>
+
 <SECTION>
-<FILE>gami-main</FILE>
 <TITLE>Gami</TITLE>
+<FILE>gami-main</FILE>
 gami_init
 gami_get_option_group
 gami_parse_args
 </SECTION>
 
 <SECTION>
-<FILE>gami-manager</FILE>
 <TITLE>GamiManager</TITLE>
+<FILE>gami-manager</FILE>
 GamiManager
 GamiManagerClass
 GamiResponseFunc
@@ -106,6 +108,7 @@ gami_module_load_type_get_type
 </SECTION>
 
 <SECTION>
+<TITLE>GamiResponse</TITLE>
 <FILE>gami-response</FILE>
 GamiResponse
 gami_response_new

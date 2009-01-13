@@ -1,0 +1,31 @@
+<refentry id="gami-compiling">
+<refmeta>
+<refentrytitle>Compiling GAmi Applications</refentrytitle>
+<refmiscinfo>GAmi Library</refmiscinfo>
+</refmeta>
+
+<refnamediv>
+<refname>Compiling GAmi Applications</refname>
+<refpurpose>How to compile your GAmi application</refpurpose>
+</refnamediv>
+
+<refsect1>
+    <title>Compiling GAmi Applications on UNIX</title>
+    <para>
+        To compile a GAmi application, you need to tell the compiler where to
+        find the GAmi header files and libraries. This is done with the 
+        <application>pkg-config</application> utility.
+    </para>
+    <para>
+        The following interactive shell session demonstrates how
+        <application>pkg-config</application> is used (the actual output on 
+        your system may be different):
+        <programlisting>
+$ pkg-config --cflags gami-1.0
+ -I/usr/include/gami-1.0 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include
+$ pkg-config --libs gami-1.0
+ -L/usr/lib -lgami-1.0 -lgobject-2.0 -lglib-2.0
+</programlisting>
+    </para>
+</refsect1>
+</refentry>

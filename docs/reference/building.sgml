@@ -1,0 +1,78 @@
+<refentry id="gami-building">
+<refmeta>
+<refentrytitle>Compiling the GAmi package</refentrytitle>
+<refmiscinfo>GAmi Library</refmiscinfo>
+</refmeta>
+
+<refnamediv>
+<refname>Compiling the GAmi Package</refname>
+<refpurpose>How to compile GAmi itself</refpurpose>
+</refnamediv>
+
+<refsect1 id="building">
+	<title>Building the Library on UNIX</title>
+	<para>
+		On UNIX, GAmi uses the standard GNU build system, using
+		<application>autoconf</application> for package configuration 
+		and resolving portability issues,
+		<application>automake</application> for building makefiles that
+		comply with the GNU Coding Standards, and
+		<application>libtool</application> for building shared libraries
+		on multiple platforms. The normal sequence for compiling and 
+		installing the GAmi Library is thus:
+
+		<literallayout>
+			<userinput>./configure</userinput>
+			<userinput>make</userinput>
+			<userinput>make install</userinput>
+		</literallayout>
+	</para>
+
+	<para>
+		The standard options provided by
+		<application>GNU autoconf</application> may be passed to the 
+		<command>configure</command> script. Please see the 
+		<application>autoconf</application> documentation or run
+		<command>./configure --help</command> for information about the
+		standard options.
+	</para>
+	<para>
+		In addition to the standard options, the
+		<command>configure</command> script supports these additional
+		arguments:
+
+		<cmdsynopsis>
+			<command>configure</command>
+			<group>
+				<arg>--enable-gtk-doc=[auto|yes|no]</arg>
+			</group>
+		</cmdsynopsis>
+	</para>
+
+	<formalpara>
+		<title><systemitem>--enable-gtk-doc</systemitem></title>
+
+		<para>
+			Build API documentation for GAmi. Note that you must 
+			have <application>gtk-doc</application> installed on 
+			your system for this option to work
+		</para>
+	</formalpara>
+</refsect1>
+<refsect1 id="dependencies">
+	<title>Dependencies</title>
+	<para>
+		Before you can compile the GAmi library, you need to have 
+		other tools and libraries installed on your system. The two 
+		tools needed during the build process (as differentiated from 
+		the tools used in when creating GAmi mentioned above such as 
+		<application>autoconf</application>) are
+		<command>pkg-config</command> and make.
+	</para>
+	<para>
+		GAmi depends on two other libraries, GLib and GObject. To 
+		successfully build GAmi, make sure those are installed 
+		including their corresponding header files.
+	</para>
+</refsect1>
+</refentry>

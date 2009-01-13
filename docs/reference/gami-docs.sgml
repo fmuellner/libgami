@@ -1,17 +1,42 @@
 <?xml version="1.0"?>
 <!DOCTYPE book PUBLIC "-//OASIS//DTD DocBook XML V4.1.2//EN"
-               "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd">
+               "http://www.oasis-open.org/docbook/xml/4.1.2/docbookx.dtd" [
+<!ENTITY gami-Compiling SYSTEM "compiling.sgml">
+<!ENTITY gami-Building SYSTEM "building.sgml">
+<!ENTITY gami-Unimplemented SYSTEM "unimplemented.sgml">
+<!ENTITY version SYSTEM "version.xml">
+]>
 <book id="index" xmlns:xi="http://www.w3.org/2003/XInclude">
   <bookinfo>
-    <title>Gami Reference Manual</title>
-    <releaseinfo>
-      for libgami [0.1]
-      <!--The latest version of this documentation can be found on-line at
-      <ulink role="online-location" url="http://[SERVER]/gami/index.html">http://[SERVER]/gami/</ulink>.-->
-    </releaseinfo>
+    <title>GAmi Reference Manual</title>
+    <releaseinfo>for libgami &version;</releaseinfo>
   </bookinfo>
 
-  <chapter>
+  <chapter id="gami">
+    <title>GAmi Overview</title>
+    <para>
+	    Gami is a GObject based library to integrate the
+	    <ulink url="http://asterisk.org">Asterisk</ulink> manager interface
+	    (AMI) with GLib and Gtk+. It should work on any UNIX-like platform
+	    supported by GLib, and even Windows, though the latter has not been
+	    tested. Gami is released under the GNU General Public License
+	    (GNU GPL).
+    </para>
+    <para>
+	    The library aims to fully support the Asterisk Manager API, 
+	    indepentantly from the API version used. Actions which differ in 
+	    syntax between different versions of Asterisk are handled 
+	    transparently, though no effort is taken to ensure an action is 
+	    actually supported by the asterisk version in use.
+    </para>
+
+    &gami-Building;
+    &gami-Compiling;
+    &gami-Unimplemented;
+
+  </chapter>
+
+  <chapter id="gami-reference">
     <title>API reference</title>
     <xi:include href="xml/gami-main.xml"/>
     <xi:include href="xml/gami-manager.xml"/>
