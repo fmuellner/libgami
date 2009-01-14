@@ -55,8 +55,8 @@ gami_response_new (GValue *value, gchar *message, gchar *action_id)
     resp = g_slice_new0 (GamiResponse);
 
     resp->value = value;
-    resp->message = message;
-    resp->action_id = action_id;
+    resp->message = g_strdup (message);
+    resp->action_id = g_strdup (action_id);
 
     resp->ref_count = 1;
 
