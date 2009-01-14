@@ -187,11 +187,6 @@ typedef struct _GamiManager GamiManager;
  */
 typedef struct _GamiManagerClass GamiManagerClass;
 
-struct _GamiManagerClass
-{
-	GObjectClass parent_class;
-};
-
 struct _GamiManager
 {
     GObject parent_instance;
