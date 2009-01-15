@@ -53,7 +53,7 @@ AM_CONDITIONAL(USE_SVN2CL, test x"$USE_SVN2CL" = xyes)
 AC_OUTPUT([
 Makefile
 gami-1.0.pc
-gami/Makefile
+src/Makefile
 po/Makefile.in
 docs/reference/Makefile
 docs/reference/version.xml

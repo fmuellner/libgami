@@ -1,4 +1,4 @@
-SUBDIRS = gami po docs/reference
+SUBDIRS = src po docs/reference
 
 gamidocdir = $(datadir)/doc/gami
 gamidoc_DATA = \
