@@ -87,5 +87,6 @@ EXTRA_DIST +=
 #DISTCLEANFILES +=
 
 # Comment this out if you want your docs-status tested during 'make check'
-#TESTS = $(GTKDOC_CHECK)
-
+check-local:
+	(cd $(srcdir) \
+	 && $(GTKDOC_CHECK))
