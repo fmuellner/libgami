@@ -74,6 +74,8 @@ struct _GamiManagerPrivate
                                                             GamiManagerPrivate))
 
 enum {
+	CONNECTED,
+	DISCONNECTED,
 	EVENT,
 	LAST_SIGNAL
 };
@@ -5595,6 +5597,40 @@ gami_manager_class_init (GamiManagerClass *klass)
 	g_type_class_add_private (klass, sizeof (GamiManagerPrivate));
 
 	object_class->finalize = gami_manager_finalize;
+
+	/**
+	 * GamiManager::connected:
+	 * @ami: The #GamiManager that received the signal
+	 *
+	 * The ::connected signal is emitted after successfully establishing 
+	 * a connection to the Asterisk server
+	 */
+	signals [CONNECTED] = g_signal_new ("connected",
+										G_TYPE_FROM_CLASS (object_class),
+										G_SIGNAL_RUN_LAST,
+										0,
+										NULL,
+										NULL,
+										g_cclosure_marshal_VOID__VOID,
+										G_TYPE_NONE,
+										0);
+
+	/**
+	 * GamiManager::disconnected
+	 * @ami: The #GamiManager that received the signal
+	 *
+	 * The ::disconnected event is emitted each time the connection to the 
+	 * Asterisk server is lost
+	 */
+	signals [DISCONNECTED] = g_signal_new ("disconnected",
+										   G_TYPE_FROM_CLASS (object_class),
+										   G_SIGNAL_RUN_LAST,
+										   0,
+										   NULL,
+										   NULL,
+										   g_cclosure_marshal_VOID__VOID,
+										   G_TYPE_NONE,
+										   0);
 
     /**
      * GamiManager::event:
