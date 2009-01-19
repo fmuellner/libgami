@@ -4475,7 +4475,7 @@ event_string_from_mask (GamiManager *mgr, GamiEventMask mask)
         g_string_append (events, "off");
     else if (mask & GAMI_EVENT_MASK_ALL)
         g_string_append (events, "on");
-    else {
+    else if (mgr->api_major && mgr->api_minor) {
         gboolean first = TRUE;
 
         if (mask & GAMI_EVENT_MASK_CALL) {
@@ -4499,12 +4499,29 @@ event_string_from_mask (GamiManager *mgr, GamiEventMask mask)
             first = FALSE;
         }
         if (mask & GAMI_EVENT_MASK_CDR) {
-            if (mgr->api_major && mgr->api_minor)
-                g_string_append_printf (events, "%scdr", first ? "" : ",");
-            else if (! mask & GAMI_EVENT_MASK_CALL)
-                g_string_append_printf (events, "%scall", first ? "" : ",");
+            g_string_append_printf (events, "%scdr", first ? "" : ",");
             first = FALSE;
         }
+    } else switch (mask) {
+        case GAMI_EVENT_MASK_CALL:
+        case GAMI_EVENT_MASK_CDR:
+            g_string_printf (events, "call");
+            break;
+        case GAMI_EVENT_MASK_SYSTEM:
+            g_string_printf (events, "system");
+            break;
+        case GAMI_EVENT_MASK_AGENT:
+            g_string_printf (events, "agent");
+            break;
+        case GAMI_EVENT_MASK_LOG:
+            g_string_printf (events, "log");
+            break;
+        case GAMI_EVENT_MASK_USER:
+            g_string_printf (events, "user");
+            break;
+        default:
+            g_string_printf (events, "on");
+            break;
     }
 
     return g_string_free (events, FALSE);
