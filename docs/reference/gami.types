@@ -1,0 +1,5 @@
+gami_response_get_type
+g_slist_get_type
+gami_event_mask_get_type
+gami_module_load_type_get_type
+gami_manager_get_type
