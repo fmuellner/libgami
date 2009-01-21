@@ -218,8 +218,8 @@ GType gami_manager_get_type (void) G_GNUC_CONST;
 GamiManager *gami_manager_new (const gchar *host, const gchar *port);
 
 GamiResponse *gami_manager_login  (GamiManager *ami, const gchar *username,
-                                   const gchar *secret, GamiEventMask events,
-                                   const gchar *action_id,
+                                   const gchar *secret, const gchar *auth_type,
+                                   GamiEventMask events, const gchar *action_id,
                                    GamiResponseFunc response_func,
                                    gpointer response_data, GError **error);
 GamiResponse *gami_manager_logoff (GamiManager *ami, const gchar *action_id, 

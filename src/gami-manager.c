@@ -211,6 +211,9 @@ gami_manager_new (const gchar *host, const gchar *port)
  * @ami: #GamiManager
  * @username: Username to use for authentification
  * @secret: Password to use for authentification
+ * @auth_type: AuthType to use for authentification - if set to "md5", @secret
+ *             is expected to contain an MD5 hash of the result string of 
+ *             gami_manager_challenge() and the user's password
  * @events: Flags of type %GamiEventMask, indicating which events should be
  *          received initially. It is possible to modify this setting using the
  *          gami_manager_events() action
@@ -227,9 +230,10 @@ gami_manager_new (const gchar *host, const gchar *port)
  */
 GamiResponse *
 gami_manager_login (GamiManager *ami, const gchar *username,
-                    const gchar *secret, GamiEventMask events,
-                    const gchar *action_id, GamiResponseFunc response_func,
-                    gpointer response_data, GError **error)
+                    const gchar *secret, const gchar *auth_type,
+                    GamiEventMask events, const gchar *action_id,
+                    GamiResponseFunc response_func, gpointer response_data,
+                    GError **error)
 {
     GamiManagerPrivate *priv;
     GString  *action;
@@ -256,8 +260,11 @@ gami_manager_login (GamiManager *ami, const gchar *username,
     priv->secret = g_strdup (secret);
 
     action = g_string_new ("Action: Login\r\n");
-    g_string_append_printf (action, "Username: %s\r\nSecret: %s\r\n",
-                            username, secret);
+    if (auth_type)
+        g_string_append_printf (action, "AuthType: %s\r\n", auth_type);
+
+    g_string_append_printf (action, "Username: %s\r\n%s: %s\r\n",
+                            username, (auth_type) ? "Key" : "Secret", secret);
 
     event_str = event_string_from_mask (ami, events);
     g_string_append_printf (action, "Events: %s\r\n", event_str);
@@ -4708,7 +4715,7 @@ reconnect_socket (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
                         (GIOFunc) reconnect_socket, mgr);
 
         if (priv->username && priv->secret) {
-            gami_manager_login (mgr, priv->username, priv->secret,
+            gami_manager_login (mgr, priv->username, priv->secret, NULL,
                                TRUE, NULL, NULL, NULL, NULL);
         }
     }
