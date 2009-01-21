@@ -95,13 +95,11 @@ G_DEFINE_TYPE (GamiManager, gami_manager, G_TYPE_OBJECT);
 static gboolean gami_manager_new_async_cb (GamiManagerNewAsyncData *data);
 static gchar *event_string_from_mask (GamiManager *ami, GamiEventMask mask);
 
-static int connect_socket (const gchar *host, const gchar *port);
+static gboolean connect_socket (GamiManager *ami);
+static gboolean reconnect_socket (GamiManager *ami);
 
 static GIOStatus send_command (GIOChannel *c, const gchar *cmd, GError **e);
 static GIOStatus receive_packet (GIOChannel *c, GHashTable **p, GError **e);
-static gboolean reconnect_socket (GIOChannel *chan,
-                                  GIOCondition cond,
-                                  GamiManager *ami);
 
 static gboolean dispatch_ami (GIOChannel *chan,
                               GIOCondition cond,
@@ -167,12 +165,6 @@ gami_manager_new (const gchar *host, const gchar *port)
     GError  *error = NULL;
     gchar   *welcome_message;
     gchar  **split_version;
-    int sock;
-
-    sock = connect_socket (host, port);
-
-    if (sock == -1)
-        return NULL;
 
     ami = g_object_new (GAMI_TYPE_MANAGER, NULL);
     priv = GAMI_MANAGER_PRIVATE (ami);
@@ -180,11 +172,12 @@ gami_manager_new (const gchar *host, const gchar *port)
     priv->host = g_strdup (host);
     priv->port = g_strdup (port);
 
-#ifdef G_OS_WIN32
-    priv->socket = g_io_channel_win32_new_socket (sock);
-#else
-    priv->socket = g_io_channel_unix_new (sock);
-#endif
+    if (! connect_socket (ami)) {
+        g_warning ("Failed to connect to the server");
+
+        g_object_unref (ami);
+        return NULL;
+    }
 
     /* read welcome message and set API */
     g_io_channel_read_line (priv->socket, &welcome_message, NULL, NULL, &error);
@@ -202,11 +195,6 @@ gami_manager_new (const gchar *host, const gchar *port)
     ami->api_major = atoi (split_version [0]);
     ami->api_minor = atoi (split_version [1]);
     g_free (split_version);
-
-    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
-                                       (GIOFunc) dispatch_ami, ami);
-    g_io_add_watch (priv->socket, G_IO_HUP | G_IO_ERR,
-                                      (GIOFunc) reconnect_socket, ami);
 
     return ami;
 }
@@ -4582,9 +4570,10 @@ event_string_from_mask (GamiManager *mgr, GamiEventMask mask)
 }
 
 /* note: I have no idea if I got the w32 stuff right */
-int
-connect_socket (const gchar *host, const gchar *port)
+gboolean
+connect_socket (GamiManager *ami)
 {
+    GamiManagerPrivate *priv;
     struct addrinfo hints;
     struct addrinfo *rp, *result;
 #ifdef G_OS_WIN32
@@ -4592,6 +4581,8 @@ connect_socket (const gchar *host, const gchar *port)
 #else
     int sock = -1;
 #endif
+
+    priv = GAMI_MANAGER_PRIVATE (ami);
 
 #ifdef G_OS_WIN32
     ZeroMemory (&hints, sizeof (hints));
@@ -4602,8 +4593,8 @@ connect_socket (const gchar *host, const gchar *port)
     hints.ai_socktype = SOCK_STREAM;
     //hints.ai_protocol = IPPROTO_TCP;
 
-    if (getaddrinfo (host, port, &hints, &result) != 0) {
-        g_warning ("Error resolving host '%s'", host);
+    if (getaddrinfo (priv->host, priv->port, &hints, &result) != 0) {
+        g_warning ("Error resolving host '%s'", priv->host);
         return sock;
     }
 
@@ -4630,13 +4621,29 @@ connect_socket (const gchar *host, const gchar *port)
 #endif
     }
 
+
     if (rp == NULL) {
+        /* FIXME: do something */
         /* Error */
+        freeaddrinfo (result);
+
+        return FALSE;
     }
 
     freeaddrinfo (result);
 
-    return sock;
+#ifdef G_OS_WIN32
+    priv->socket = g_io_channel_win32_new_socket (sock);
+#else
+    priv->socket = g_io_channel_unix_new (sock);
+#endif
+
+    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
+                    (GIOFunc) dispatch_ami, ami);
+
+    g_signal_emit (ami, signals [CONNECTED], 0);
+
+    return TRUE;
 }
 
 static GIOStatus
@@ -4737,37 +4744,17 @@ receive_packet (GIOChannel *chan, GHashTable **pkt, GError **error)
 }
 
 static gboolean
-reconnect_socket (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
+reconnect_socket (GamiManager *ami)
 {
     GamiManagerPrivate *priv;
 
-    priv = GAMI_MANAGER_PRIVATE (mgr);
+    priv = GAMI_MANAGER_PRIVATE (ami);
 
-    if (cond == G_IO_HUP || cond == G_IO_ERR) {
-        int sock;
+    close (g_io_channel_unix_get_fd (priv->socket));
+    g_io_channel_shutdown (priv->socket, TRUE, NULL);
+    g_io_channel_unref (priv->socket);
 
-        g_io_channel_shutdown (chan, TRUE, NULL);
-        g_io_channel_unref (chan);
-
-        sock = connect_socket (priv->host, priv->port);
-#ifdef G_OS_WIN32
-        priv->socket = g_io_channel_win32_new_socket (sock);
-#else
-        priv->socket = g_io_channel_unix_new (sock);
-#endif
-
-        g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
-                        (GIOFunc) dispatch_ami, mgr);
-        g_io_add_watch (priv->socket, G_IO_HUP | G_IO_ERR,
-                        (GIOFunc) reconnect_socket, mgr);
-
-        if (priv->username && priv->secret) {
-            gami_manager_login (mgr, priv->username, priv->secret, NULL,
-                               TRUE, NULL, NULL, NULL, NULL);
-        }
-    }
-
-    return TRUE;
+    return ! connect_socket (ami);  /* try again if connection failed */
 }
 
 static gboolean
@@ -4777,7 +4764,14 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
 
     priv = GAMI_MANAGER_PRIVATE (mgr);
 
-    if (cond == G_IO_IN || cond == G_IO_PRI) {
+    if (cond == G_IO_HUP || cond == G_IO_ERR) {
+
+        g_signal_emit (mgr, signals [DISCONNECTED], 0);
+        g_idle_add ((GSourceFunc) reconnect_socket, mgr);
+
+        return FALSE;
+
+    } else if (cond == G_IO_IN || cond == G_IO_PRI) {
         GHashTable *packet = NULL;
         GIOStatus status;
 
