@@ -207,6 +207,15 @@ typedef void (*GamiResponseFunc) (GamiResponse *response,
 								  gpointer user_data);
 
 /**
+ * GamiManagerNewAsyncFunc:
+ * @gami: the newly created #GamiManager
+ * @user_data: user data passed to the function
+ *
+ * Specifies the type of functions passed to gami_manager_new_async()
+ */
+typedef void (*GamiManagerNewAsyncFunc) (GamiManager *gami,
+										 gpointer user_data);
+/**
  * gami_manager_get_type:
  *
  * Get the #GType of #GamiManager
@@ -216,6 +225,9 @@ typedef void (*GamiResponseFunc) (GamiResponse *response,
 GType gami_manager_get_type (void) G_GNUC_CONST;
 
 GamiManager *gami_manager_new (const gchar *host, const gchar *port);
+void         gami_manager_new_async (const gchar *host, const gchar *port,
+									 GamiManagerNewAsyncFunc func,
+									 gpointer user_data);
 
 GamiResponse *gami_manager_login  (GamiManager *ami, const gchar *username,
                                    const gchar *secret, const gchar *auth_type,

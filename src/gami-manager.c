@@ -73,6 +73,14 @@ struct _GamiManagerPrivate
                                                             GAMI_TYPE_MANAGER, \
                                                             GamiManagerPrivate))
 
+typedef struct _GamiManagerNewAsyncData GamiManagerNewAsyncData;
+struct _GamiManagerNewAsyncData {
+    const gchar *host;
+    const gchar *port;
+    GamiManagerNewAsyncFunc func;
+    gpointer data;
+};
+
 enum {
 	CONNECTED,
 	DISCONNECTED,
@@ -84,6 +92,7 @@ static guint signals [LAST_SIGNAL];
 
 G_DEFINE_TYPE (GamiManager, gami_manager, G_TYPE_OBJECT);
 
+static gboolean gami_manager_new_async_cb (GamiManagerNewAsyncData *data);
 static gchar *event_string_from_mask (GamiManager *ami, GamiEventMask mask);
 
 static int connect_socket (const gchar *host, const gchar *port);
@@ -202,6 +211,33 @@ gami_manager_new (const gchar *host, const gchar *port)
     return ami;
 }
 
+/**
+ * gami_manager_new_async:
+ * @host: Asterisk manager host.
+ * @port: Asterisk manager port.
+ * @func: Callback function called when object has been created
+ * @user_data: data to pass to @func
+ *
+ * Asynchronously create a #GamiManager connected to @host:@port. The new 
+ * object will be passed as a parameter to @func when finished.
+ */
+void
+gami_manager_new_async (const gchar *host, const gchar *port,
+                        GamiManagerNewAsyncFunc func, gpointer user_data)
+{
+    GamiManagerNewAsyncData *data;
+    data = g_new0 (GamiManagerNewAsyncData, 1);
+    data->host = host;
+    data->port = port;
+    data->func = func;
+    data->data = user_data;
+
+    if (g_thread_supported ())
+        g_thread_create ((GThreadFunc) gami_manager_new_async_cb, data,
+                         FALSE, NULL);
+    else
+        g_idle_add ((GSourceFunc) gami_manager_new_async_cb, data);
+}
 /*
  * Login/Logoff
  */
@@ -4471,6 +4507,17 @@ gami_manager_wait_event (GamiManager *ami, guint timeout,
 /*
  * Private API
  */
+
+static gboolean
+gami_manager_new_async_cb (GamiManagerNewAsyncData *data)
+{
+    GamiManager *gami;
+
+    gami = gami_manager_new (data->host, data->port);
+    data->func (gami, data->data);
+
+    return FALSE; /* for g_idle_add() */
+}
 
 static gchar *
 event_string_from_mask (GamiManager *mgr, GamiEventMask mask)
