@@ -14,9 +14,11 @@ gami_parse_args
 GamiManager
 GamiManagerClass
 GamiResponseFunc
+GamiManagerNewAsyncFunc
 GamiEventMask
 GamiModuleLoadType
 gami_manager_new
+gami_manager_new_async
 gami_manager_login
 gami_manager_logoff
 gami_manager_get_var
