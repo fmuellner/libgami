@@ -136,9 +136,9 @@ static GamiResponse *get_voicemaillist_response (GamiManager *ami,
                                                 GHashTable *resp);
 
 static gboolean check_response (GHashTable *p, const gchar *expected_value);
-static GSList *get_response_list (GIOChannel *chan, gchar *list_event,
-                                  gchar *stop_event, gchar *check_num,
-                                  GError **error);
+static gboolean get_response_list (GIOChannel *chan, GSList *list,
+                                   gchar *list_event, gchar *stop_event,
+                                   gchar *check_num, GError **error);
 static void join_originate_vars (gchar *key, gchar *value, GString *s);
 static void join_user_event_headers (gchar *key, gchar *value, GString *s);
 
@@ -5052,13 +5052,11 @@ get_zaplist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
        
        priv = GAMI_MANAGER_PRIVATE (mgr);
-       list  = get_response_list (priv->socket, "ZapShowChannels",
-                                  "ZapShowChannelsComplete", NULL, &error);
-
-       if (list) {
+       if (get_response_list (priv->socket, list, "ZapShowChannels",
+                              "ZapShowChannelsComplete", NULL, &error)) {
            value = g_value_init (value, G_TYPE_SLIST);
            g_value_set_boxed (value, list);
        } else {
@@ -5093,13 +5091,11 @@ get_dahdilist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
        
        priv = GAMI_MANAGER_PRIVATE (mgr);
-       list  = get_response_list (priv->socket, "DAHDIShowChannels",
-                                  "DAHDIShowChannelsComplete", "Items", &error);
-
-       if (list) {
+       if (get_response_list (priv->socket, list, "DAHDIShowChannels",
+                              "DAHDIShowChannelsComplete", "Items", &error)) {
            value = g_value_init (value, G_TYPE_SLIST);
            g_value_set_boxed (value, list);
        } else {
@@ -5134,13 +5130,11 @@ get_agentlist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
        
        priv = GAMI_MANAGER_PRIVATE (mgr);
-       list = get_response_list (priv->socket, "Agents", "AgentsComplete",
-                                 NULL, &error);
-
-       if (list) {
+       if (get_response_list (priv->socket, list, "Agents", "AgentsComplete",
+                              NULL, &error)) {
            value = g_value_init (value, G_TYPE_SLIST);
            g_value_set_boxed (value, list);
        } else {
@@ -5175,13 +5169,11 @@ get_parklist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        list = get_response_list (priv->socket, "ParkedCall",
-                                  "ParkedCallsComplete", NULL, &error);
-
-        if (list) {
+        if (get_response_list (priv->socket, list, "ParkedCall",
+                               "ParkedCallsComplete", NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5216,14 +5208,11 @@ get_meetmelist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
        
        priv = GAMI_MANAGER_PRIVATE (mgr);
-       list = get_response_list (priv->socket, "MeetmeList",
-                                 "MeetmeListComplete",
-                                 "ListItems", &error);
-
-        if (list) {
+       if (get_response_list (priv->socket, list, "MeetmeList",
+                              "MeetmeListComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5258,13 +5247,11 @@ get_siplist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
        
        priv = GAMI_MANAGER_PRIVATE (mgr);
-       list = get_response_list (priv->socket, "PeerEntry", "PeerlistComplete",
-                                 "ListItems", &error);
-
-        if (list) {
+       if (get_response_list (priv->socket, list, "PeerEntry",
+                              "PeerlistComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5299,13 +5286,11 @@ get_iaxlist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
        
        priv = GAMI_MANAGER_PRIVATE (mgr);
-       list = get_response_list (priv->socket, "PeerEntry", "PeerlistComplete",
-                                 "ListItems", &error);
-
-        if (list) {
+       if (get_response_list (priv->socket, list, "PeerEntry",
+                              "PeerlistComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5340,14 +5325,12 @@ get_showchannelslist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
        
        priv = GAMI_MANAGER_PRIVATE (mgr);
-       list = get_response_list (priv->socket, NULL,
-                                 "CoreShowChannelsComplete",
-                                 "ListItems", &error);
-
-        if (list) {
+       if (get_response_list (priv->socket, list, NULL,
+                              "CoreShowChannelsComplete", "ListItems",
+                              &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5382,13 +5365,11 @@ get_sipregistrylist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
        
        priv = GAMI_MANAGER_PRIVATE (mgr);
-       list = get_response_list (priv->socket, "RegistryEntry",
-                                 "RegistrationsComplete", "ListItems", &error);
-
-        if (list) {
+       if (get_response_list (priv->socket, list, "RegistryEntry",
+                              "RegistrationsComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5423,13 +5404,11 @@ get_statuslist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       list = get_response_list (priv->socket, "Status", "StatusComplete",
-                                 NULL, &error);
+        GSList *list = NULL;
 
-        if (list) {
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "Status", "StatusComplete",
+                               NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5464,13 +5443,11 @@ get_queuelist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       list = get_response_list (priv->socket, "QueueSummary",
-                                 "QueueSummaryComplete", NULL, &error);
+        GSList *list = NULL;
 
-        if (list) {
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "QueueSummary",
+                               "QueueSummaryComplete", NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5505,13 +5482,11 @@ get_voicemaillist_response (GamiManager *mgr, GHashTable *pkt)
         g_value_set_boolean (value, FALSE);
     } else {
         GamiManagerPrivate *priv;
-        GSList *list;
+        GSList *list = NULL;
        
        priv = GAMI_MANAGER_PRIVATE (mgr);
-       list = get_response_list (priv->socket, "VoicemailUserEntry",
-                                 "VoicemailUserEntryComplete", NULL, &error);
-
-        if (list) {
+       if (get_response_list (priv->socket, list, "VoicemailUserEntry",
+                              "VoicemailUserEntryComplete", NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5540,11 +5515,10 @@ check_response (GHashTable *pkt, const gchar *value)
     return TRUE;
 }
 
-static GSList *
-get_response_list (GIOChannel *chan, gchar *list_event, gchar *stop_event,
-                   gchar *check_num, GError **error)
+static gboolean
+get_response_list (GIOChannel *chan, GSList *list, gchar *list_event,
+                   gchar *stop_event, gchar *check_num, GError **error)
 {
-    GSList *list = NULL;
     gint listitems = -1;
     gboolean list_complete = FALSE;
 
@@ -5567,7 +5541,7 @@ get_response_list (GIOChannel *chan, gchar *list_event, gchar *stop_event,
 				g_slist_free (list);
 			}
 
-            return NULL;
+            return FALSE;
         }
 
         g_assert (error == NULL || *error == NULL);
@@ -5603,7 +5577,7 @@ get_response_list (GIOChannel *chan, gchar *list_event, gchar *stop_event,
 
     list = g_slist_reverse (list);
 
-    return list;
+    return TRUE;
 }
 
 static void join_originate_vars (gchar *key, gchar *value, GString *s)
