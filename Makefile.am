@@ -1,4 +1,4 @@
-SUBDIRS = src po docs/reference
+SUBDIRS = src po docs
 
 gamidocdir = $(datadir)/doc/gami
 gamidoc_DATA = \
@@ -35,7 +35,9 @@ dist-hook:
 	done
 if USE_SVN2CL
 	@SVN2CL@ --group-by-day -o $(distdir)/ChangeLog
+endif
 
 install-data-hook:
+if USE_SVN2CL
 	@SVN2CL@ --group-by-day -o $(gamidocdir)/ChangeLog
 endif
