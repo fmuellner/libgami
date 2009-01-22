@@ -51,16 +51,16 @@
 
 struct _GamiManagerClass
 {
-	GObjectClass parent_class;
+    GObjectClass parent_class;
 };
 
 typedef struct _GamiManagerPrivate GamiManagerPrivate;
 struct _GamiManagerPrivate
 {
-	GIOChannel *socket;
+    GIOChannel *socket;
     gboolean block_events;
-	gchar *host;
-	gchar *port;
+    gchar *host;
+    gchar *port;
     gchar *username;
     gchar *secret;
 
@@ -82,10 +82,10 @@ struct _GamiManagerNewAsyncData {
 };
 
 enum {
-	CONNECTED,
-	DISCONNECTED,
-	EVENT,
-	LAST_SIGNAL
+    CONNECTED,
+    DISCONNECTED,
+    EVENT,
+    LAST_SIGNAL
 };
 
 static guint signals [LAST_SIGNAL];
@@ -108,7 +108,7 @@ static gboolean dispatch_ami (GIOChannel *chan,
 /* return value in synchronious operation */
 static GamiResponse *ami_wait_response (GamiManager *ami, GError **error);
 static GamiResponse *action_response (GamiManager *ami, GIOStatus status,
-                                     const gchar *action_id, GError **error);
+                                      const gchar *action_id, GError **error);
 
 /* response functions to feed callbacks to "response" signal */
 static GamiResponse *get_bool_response (GamiManager *ami, GHashTable *resp);
@@ -116,24 +116,30 @@ static GamiResponse *get_ping_response (GamiManager *ami, GHashTable *resp);
 static GamiResponse *get_events_response (GamiManager *ami, GHashTable *resp);
 static GamiResponse *get_logoff_response (GamiManager *ami, GHashTable *resp);
 static GamiResponse *get_hash_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_challenge_response (GamiManager *ami, GHashTable *resp);
+static GamiResponse *get_challenge_response (GamiManager *ami,
+                                             GHashTable *resp);
 static GamiResponse *get_getvar_response (GamiManager *ami, GHashTable *resp);
 static GamiResponse *get_dbget_response (GamiManager *ami, GHashTable *resp);
 static GamiResponse *get_zaplist_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_dahdilist_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_agentlist_response (GamiManager *ami, GHashTable *resp);
+static GamiResponse *get_dahdilist_response (GamiManager *ami,
+                                             GHashTable *resp);
+static GamiResponse *get_agentlist_response (GamiManager *ami,
+                                             GHashTable *resp);
 static GamiResponse *get_parklist_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_meetmelist_response (GamiManager *ami, GHashTable *resp);
+static GamiResponse *get_meetmelist_response (GamiManager *ami,
+                                              GHashTable *resp);
 static GamiResponse *get_siplist_response (GamiManager *ami, GHashTable *resp);
 static GamiResponse *get_iaxlist_response (GamiManager *ami, GHashTable *resp);
 static GamiResponse *get_sipregistrylist_response (GamiManager *ami,
-                                                  GHashTable *resp);
-static GamiResponse *get_statuslist_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_showchannelslist_response (GamiManager *ami,
                                                    GHashTable *resp);
-static GamiResponse *get_queuelist_response (GamiManager *ami, GHashTable *resp);
+static GamiResponse *get_statuslist_response (GamiManager *ami,
+                                              GHashTable *resp);
+static GamiResponse *get_showchannelslist_response (GamiManager *ami,
+                                                    GHashTable *resp);
+static GamiResponse *get_queuelist_response (GamiManager *ami,
+                                             GHashTable *resp);
 static GamiResponse *get_voicemaillist_response (GamiManager *ami,
-                                                GHashTable *resp);
+                                                 GHashTable *resp);
 
 static gboolean check_response (GHashTable *p, const gchar *expected_value);
 static gboolean get_response_list (GIOChannel *chan, GSList *list,
@@ -346,7 +352,7 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
         g_string_append_printf (action, "ActionID: %s\r\n", action_id);
 
     g_string_append (action, "\r\n");
-    
+
     action_str = g_string_free (action, FALSE);
 
     iostatus = send_command (priv->socket, action_str, error);
@@ -475,7 +481,7 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
 /*
  * Module handling
  */
- 
+
 /**
  * gami_manager_module_check:
  * @ami: #GamiManager
@@ -1372,9 +1378,9 @@ gami_manager_queue_log (GamiManager *ami, const gchar *queue,
 }
 
 #if 0
-GSList *
+    GSList *
 gami_manager_queue_status (GamiManager *ami, const gchar *queue,
-                          const gchar *action_id, GError **error)
+                           const gchar *action_id, GError **error)
 {
     GamiManagerPrivate *priv;
     GString *action;
@@ -1425,10 +1431,10 @@ gami_manager_queue_status (GamiManager *ami, const gchar *queue,
         if (status != G_IO_STATUS_NORMAL) {
             g_assert (error == NULL || *error != NULL);
 
-			if (list) {
-				g_slist_foreach (list, (GFunc)g_hash_table_destroy, NULL);
-				g_slist_free (list);
-			}
+            if (list) {
+                g_slist_foreach (list, (GFunc)g_hash_table_destroy, NULL);
+                g_slist_free (list);
+            }
 
             return NULL;
         }
@@ -1894,7 +1900,7 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+    GamiResponse *
 gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
                            const gchar *action_id,
                            GamiResponseFunc response_func,
@@ -3339,7 +3345,7 @@ gami_manager_ping (GamiManager *ami, const gchar *action_id,
 
     priv->response_value_func = (ami->api_major
                                  && ami->api_minor) ? get_bool_response
-                                                    : get_ping_response;
+        : get_ping_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
 
@@ -4353,7 +4359,7 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
 
     priv->response_value_func = (ami->api_major
                                  && ami->api_minor) ? get_bool_response
-                                                    : get_events_response;
+        : get_events_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
 
@@ -4377,7 +4383,7 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
 }
 
 /**
-* gami_manager_user_event
+ * gami_manager_user_event
  * @ami: #GamiManager
  * @user_event: The user defined event to send
  * @headers: (optional) Optional header to add to the event
@@ -4440,7 +4446,7 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
 }
 
 /**
-* gami_manager_wait_event
+ * gami_manager_wait_event
  * @ami: #GamiManager
  * @timeout: (optional) Maximum time to wait for events in seconds
  * @action_id: (optional) ActionID to ease response matching
@@ -4570,7 +4576,7 @@ event_string_from_mask (GamiManager *mgr, GamiEventMask mask)
 }
 
 /* note: I have no idea if I got the w32 stuff right */
-gboolean
+static gboolean
 connect_socket (GamiManager *ami)
 {
     GamiManagerPrivate *priv;
@@ -4779,7 +4785,7 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
                                          &packet,
                                          NULL)) == G_IO_STATUS_AGAIN);
 
-		if (packet) {
+        if (packet) {
             if (status == G_IO_STATUS_NORMAL) {
                 if (g_hash_table_lookup (packet, "Event"))
                     g_signal_emit (mgr, signals [EVENT], 0, packet);
@@ -4792,7 +4798,7 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
                     }
             }
 
-			g_hash_table_unref (packet);
+            g_hash_table_unref (packet);
         }
     }
 
@@ -5053,21 +5059,21 @@ get_zaplist_response (GamiManager *mgr, GHashTable *pkt)
     } else {
         GamiManagerPrivate *priv;
         GSList *list = NULL;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       if (get_response_list (priv->socket, list, "ZapShowChannels",
-                              "ZapShowChannelsComplete", NULL, &error)) {
-           value = g_value_init (value, G_TYPE_SLIST);
-           g_value_set_boxed (value, list);
-       } else {
-           value = g_value_init (value, G_TYPE_BOOLEAN);
-           g_value_set_boolean (value, FALSE);
-           
-           if (error) {
-               message = g_strdup (error->message);
-               g_error_free (error);
-           }
-       }
+
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "ZapShowChannels",
+                               "ZapShowChannelsComplete", NULL, &error)) {
+            value = g_value_init (value, G_TYPE_SLIST);
+            g_value_set_boxed (value, list);
+        } else {
+            value = g_value_init (value, G_TYPE_BOOLEAN);
+            g_value_set_boolean (value, FALSE);
+
+            if (error) {
+                message = g_strdup (error->message);
+                g_error_free (error);
+            }
+        }
     }
 
     return gami_response_new (value, message, action_id);
@@ -5092,21 +5098,21 @@ get_dahdilist_response (GamiManager *mgr, GHashTable *pkt)
     } else {
         GamiManagerPrivate *priv;
         GSList *list = NULL;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       if (get_response_list (priv->socket, list, "DAHDIShowChannels",
-                              "DAHDIShowChannelsComplete", "Items", &error)) {
-           value = g_value_init (value, G_TYPE_SLIST);
-           g_value_set_boxed (value, list);
-       } else {
-           value = g_value_init (value, G_TYPE_BOOLEAN);
-           g_value_set_boolean (value, FALSE);
-           
-           if (error) {
-               message = g_strdup (error->message);
-               g_error_free (error);
-           }
-       }
+
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "DAHDIShowChannels",
+                               "DAHDIShowChannelsComplete", "Items", &error)) {
+            value = g_value_init (value, G_TYPE_SLIST);
+            g_value_set_boxed (value, list);
+        } else {
+            value = g_value_init (value, G_TYPE_BOOLEAN);
+            g_value_set_boolean (value, FALSE);
+
+            if (error) {
+                message = g_strdup (error->message);
+                g_error_free (error);
+            }
+        }
     }
 
     return gami_response_new (value, message, action_id);
@@ -5131,21 +5137,21 @@ get_agentlist_response (GamiManager *mgr, GHashTable *pkt)
     } else {
         GamiManagerPrivate *priv;
         GSList *list = NULL;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       if (get_response_list (priv->socket, list, "Agents", "AgentsComplete",
-                              NULL, &error)) {
-           value = g_value_init (value, G_TYPE_SLIST);
-           g_value_set_boxed (value, list);
-       } else {
-           value = g_value_init (value, G_TYPE_BOOLEAN);
-           g_value_set_boolean (value, FALSE);
-           
-           if (error) {
-               message = g_strdup (error->message);
-               g_error_free (error);
-           }
-       }
+
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "Agents", "AgentsComplete",
+                               NULL, &error)) {
+            value = g_value_init (value, G_TYPE_SLIST);
+            g_value_set_boxed (value, list);
+        } else {
+            value = g_value_init (value, G_TYPE_BOOLEAN);
+            g_value_set_boolean (value, FALSE);
+
+            if (error) {
+                message = g_strdup (error->message);
+                g_error_free (error);
+            }
+        }
     }
 
     return gami_response_new (value, message, action_id);
@@ -5209,10 +5215,10 @@ get_meetmelist_response (GamiManager *mgr, GHashTable *pkt)
     } else {
         GamiManagerPrivate *priv;
         GSList *list = NULL;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       if (get_response_list (priv->socket, list, "MeetmeList",
-                              "MeetmeListComplete", "ListItems", &error)) {
+
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "MeetmeList",
+                               "MeetmeListComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5248,10 +5254,10 @@ get_siplist_response (GamiManager *mgr, GHashTable *pkt)
     } else {
         GamiManagerPrivate *priv;
         GSList *list = NULL;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       if (get_response_list (priv->socket, list, "PeerEntry",
-                              "PeerlistComplete", "ListItems", &error)) {
+
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "PeerEntry",
+                               "PeerlistComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5287,10 +5293,10 @@ get_iaxlist_response (GamiManager *mgr, GHashTable *pkt)
     } else {
         GamiManagerPrivate *priv;
         GSList *list = NULL;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       if (get_response_list (priv->socket, list, "PeerEntry",
-                              "PeerlistComplete", "ListItems", &error)) {
+
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "PeerEntry",
+                               "PeerlistComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5326,11 +5332,11 @@ get_showchannelslist_response (GamiManager *mgr, GHashTable *pkt)
     } else {
         GamiManagerPrivate *priv;
         GSList *list = NULL;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       if (get_response_list (priv->socket, list, NULL,
-                              "CoreShowChannelsComplete", "ListItems",
-                              &error)) {
+
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, NULL,
+                               "CoreShowChannelsComplete", "ListItems",
+                               &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5366,10 +5372,10 @@ get_sipregistrylist_response (GamiManager *mgr, GHashTable *pkt)
     } else {
         GamiManagerPrivate *priv;
         GSList *list = NULL;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       if (get_response_list (priv->socket, list, "RegistryEntry",
-                              "RegistrationsComplete", "ListItems", &error)) {
+
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "RegistryEntry",
+                               "RegistrationsComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5483,10 +5489,10 @@ get_voicemaillist_response (GamiManager *mgr, GHashTable *pkt)
     } else {
         GamiManagerPrivate *priv;
         GSList *list = NULL;
-       
-       priv = GAMI_MANAGER_PRIVATE (mgr);
-       if (get_response_list (priv->socket, list, "VoicemailUserEntry",
-                              "VoicemailUserEntryComplete", NULL, &error)) {
+
+        priv = GAMI_MANAGER_PRIVATE (mgr);
+        if (get_response_list (priv->socket, list, "VoicemailUserEntry",
+                               "VoicemailUserEntryComplete", NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
         } else {
@@ -5536,10 +5542,10 @@ get_response_list (GIOChannel *chan, GSList *list, gchar *list_event,
         if (status != G_IO_STATUS_NORMAL) {
             g_assert (error == NULL || *error != NULL);
 
-			if (list) {
-				g_slist_foreach (list, (GFunc)g_hash_table_destroy, NULL);
-				g_slist_free (list);
-			}
+            if (list) {
+                g_slist_foreach (list, (GFunc)g_hash_table_destroy, NULL);
+                g_slist_free (list);
+            }
 
             return FALSE;
         }
@@ -5625,51 +5631,51 @@ gami_manager_finalize (GObject *object)
         g_free ((gchar *) GAMI_MANAGER (object)->api_version);
     g_debug ("Member variables have been freed");
 
-	G_OBJECT_CLASS (gami_manager_parent_class)->finalize (object);
+    G_OBJECT_CLASS (gami_manager_parent_class)->finalize (object);
 }
 
 static void
 gami_manager_class_init (GamiManagerClass *klass)
 {
-	GObjectClass* object_class = G_OBJECT_CLASS (klass);
+    GObjectClass* object_class = G_OBJECT_CLASS (klass);
 
-	g_type_class_add_private (klass, sizeof (GamiManagerPrivate));
+    g_type_class_add_private (klass, sizeof (GamiManagerPrivate));
 
-	object_class->finalize = gami_manager_finalize;
+    object_class->finalize = gami_manager_finalize;
 
-	/**
-	 * GamiManager::connected:
-	 * @ami: The #GamiManager that received the signal
-	 *
-	 * The ::connected signal is emitted after successfully establishing 
-	 * a connection to the Asterisk server
-	 */
-	signals [CONNECTED] = g_signal_new ("connected",
-										G_TYPE_FROM_CLASS (object_class),
-										G_SIGNAL_RUN_LAST,
-										0,
-										NULL,
-										NULL,
-										g_cclosure_marshal_VOID__VOID,
-										G_TYPE_NONE,
-										0);
+    /**
+     * GamiManager::connected:
+     * @ami: The #GamiManager that received the signal
+     *
+     * The ::connected signal is emitted after successfully establishing 
+     * a connection to the Asterisk server
+     */
+    signals [CONNECTED] = g_signal_new ("connected",
+                                        G_TYPE_FROM_CLASS (object_class),
+                                        G_SIGNAL_RUN_LAST,
+                                        0,
+                                        NULL,
+                                        NULL,
+                                        g_cclosure_marshal_VOID__VOID,
+                                        G_TYPE_NONE,
+                                        0);
 
-	/**
-	 * GamiManager::disconnected
-	 * @ami: The #GamiManager that received the signal
-	 *
-	 * The ::disconnected event is emitted each time the connection to the 
-	 * Asterisk server is lost
-	 */
-	signals [DISCONNECTED] = g_signal_new ("disconnected",
-										   G_TYPE_FROM_CLASS (object_class),
-										   G_SIGNAL_RUN_LAST,
-										   0,
-										   NULL,
-										   NULL,
-										   g_cclosure_marshal_VOID__VOID,
-										   G_TYPE_NONE,
-										   0);
+    /**
+     * GamiManager::disconnected
+     * @ami: The #GamiManager that received the signal
+     *
+     * The ::disconnected event is emitted each time the connection to the 
+     * Asterisk server is lost
+     */
+    signals [DISCONNECTED] = g_signal_new ("disconnected",
+                                           G_TYPE_FROM_CLASS (object_class),
+                                           G_SIGNAL_RUN_LAST,
+                                           0,
+                                           NULL,
+                                           NULL,
+                                           g_cclosure_marshal_VOID__VOID,
+                                           G_TYPE_NONE,
+                                           0);
 
     /**
      * GamiManager::event:
@@ -5678,15 +5684,15 @@ gami_manager_class_init (GamiManagerClass *klass)
      *
      * The ::event signal is emitted each time Asterisk emits an event
      */
-	signals [EVENT] = g_signal_new ("event",
-									G_TYPE_FROM_CLASS (object_class),
-									G_SIGNAL_RUN_LAST,
-									0,
-									NULL,
-									NULL,
-									g_cclosure_marshal_VOID__BOXED,
-									G_TYPE_NONE,
-									1, G_TYPE_HASH_TABLE);
+    signals [EVENT] = g_signal_new ("event",
+                                    G_TYPE_FROM_CLASS (object_class),
+                                    G_SIGNAL_RUN_LAST,
+                                    0,
+                                    NULL,
+                                    NULL,
+                                    g_cclosure_marshal_VOID__BOXED,
+                                    G_TYPE_NONE,
+                                    1, G_TYPE_HASH_TABLE);
 }
 
 GType

@@ -37,8 +37,8 @@
 typedef struct _GamiResponse GamiResponse;
 
 GamiResponse *gami_response_new (GValue *value,
-                               gchar *message,
-                               gchar *action_id);
+                                 gchar *message,
+                                 gchar *action_id);
 
 GamiResponse *gami_response_ref   (GamiResponse *response);
 void          gami_response_unref (GamiResponse *response);
