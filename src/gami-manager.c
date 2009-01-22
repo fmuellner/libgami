@@ -142,7 +142,7 @@ static GamiResponse *get_voicemaillist_response (GamiManager *ami,
                                                  GHashTable *resp);
 
 static gboolean check_response (GHashTable *p, const gchar *expected_value);
-static gboolean get_response_list (GIOChannel *chan, GSList *list,
+static gboolean get_response_list (GIOChannel *chan, GSList **list,
                                    gchar *list_event, gchar *stop_event,
                                    gchar *check_num, GError **error);
 static void join_originate_vars (gchar *key, gchar *value, GString *s);
@@ -5061,7 +5061,7 @@ get_zaplist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "ZapShowChannels",
+        if (get_response_list (priv->socket, &list, "ZapShowChannels",
                                "ZapShowChannelsComplete", NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5100,7 +5100,7 @@ get_dahdilist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "DAHDIShowChannels",
+        if (get_response_list (priv->socket, &list, "DAHDIShowChannels",
                                "DAHDIShowChannelsComplete", "Items", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5139,7 +5139,7 @@ get_agentlist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "Agents", "AgentsComplete",
+        if (get_response_list (priv->socket, &list, "Agents", "AgentsComplete",
                                NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5178,7 +5178,7 @@ get_parklist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "ParkedCall",
+        if (get_response_list (priv->socket, &list, "ParkedCall",
                                "ParkedCallsComplete", NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5217,7 +5217,7 @@ get_meetmelist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "MeetmeList",
+        if (get_response_list (priv->socket, &list, "MeetmeList",
                                "MeetmeListComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5256,7 +5256,7 @@ get_siplist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "PeerEntry",
+        if (get_response_list (priv->socket, &list, "PeerEntry",
                                "PeerlistComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5295,7 +5295,7 @@ get_iaxlist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "PeerEntry",
+        if (get_response_list (priv->socket, &list, "PeerEntry",
                                "PeerlistComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5334,7 +5334,7 @@ get_showchannelslist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, NULL,
+        if (get_response_list (priv->socket, &list, NULL,
                                "CoreShowChannelsComplete", "ListItems",
                                &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
@@ -5374,7 +5374,7 @@ get_sipregistrylist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "RegistryEntry",
+        if (get_response_list (priv->socket, &list, "RegistryEntry",
                                "RegistrationsComplete", "ListItems", &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5413,7 +5413,7 @@ get_statuslist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "Status", "StatusComplete",
+        if (get_response_list (priv->socket, &list, "Status", "StatusComplete",
                                NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5452,7 +5452,7 @@ get_queuelist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "QueueSummary",
+        if (get_response_list (priv->socket, &list, "QueueSummary",
                                "QueueSummaryComplete", NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5491,7 +5491,7 @@ get_voicemaillist_response (GamiManager *mgr, GHashTable *pkt)
         GSList *list = NULL;
 
         priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, list, "VoicemailUserEntry",
+        if (get_response_list (priv->socket, &list, "VoicemailUserEntry",
                                "VoicemailUserEntryComplete", NULL, &error)) {
             value = g_value_init (value, G_TYPE_SLIST);
             g_value_set_boxed (value, list);
@@ -5522,13 +5522,14 @@ check_response (GHashTable *pkt, const gchar *value)
 }
 
 static gboolean
-get_response_list (GIOChannel *chan, GSList *list, gchar *list_event,
+get_response_list (GIOChannel *chan, GSList **list, gchar *list_event,
                    gchar *stop_event, gchar *check_num, GError **error)
 {
     gint listitems = -1;
     gboolean list_complete = FALSE;
 
     g_assert (error == NULL || *error == NULL);
+    g_assert (list != NULL && *list == NULL);
 
     while (! list_complete) {
         GIOStatus status;
@@ -5542,9 +5543,9 @@ get_response_list (GIOChannel *chan, GSList *list, gchar *list_event,
         if (status != G_IO_STATUS_NORMAL) {
             g_assert (error == NULL || *error != NULL);
 
-            if (list) {
-                g_slist_foreach (list, (GFunc)g_hash_table_destroy, NULL);
-                g_slist_free (list);
+            if (*list) {
+                g_slist_foreach (*list, (GFunc)g_hash_table_destroy, NULL);
+                g_slist_free (*list);
             }
 
             return FALSE;
@@ -5556,7 +5557,7 @@ get_response_list (GIOChannel *chan, GSList *list, gchar *list_event,
         if (event) {
             if (list_event && ! strcmp (event, list_event)) {
                 g_hash_table_remove (packet, "Event");
-                list = g_slist_prepend (list, packet);
+                *list = g_slist_prepend (*list, packet);
                 packet = NULL;
             } else if (! strcmp (event, stop_event)) {
                 list_complete = TRUE;
@@ -5571,17 +5572,17 @@ get_response_list (GIOChannel *chan, GSList *list, gchar *list_event,
                 packet = NULL;
             }
         } else if (! list_event) {
-            list = g_slist_prepend (list, packet);
+            *list = g_slist_prepend (*list, packet);
             packet = NULL;
         }
     }
 
-    if (listitems != -1 && listitems != g_slist_length (list)) {
+    if (listitems != -1 && listitems != g_slist_length (*list)) {
         g_warning ("Wrong element number in list, expected %d, received %d",
-                   listitems, g_slist_length (list));
+                   listitems, g_slist_length (*list));
     }
 
-    list = g_slist_reverse (list);
+    *list = g_slist_reverse (*list);
 
     return TRUE;
 }
