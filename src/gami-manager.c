@@ -4601,7 +4601,7 @@ connect_socket (GamiManager *ami)
 
     if (getaddrinfo (priv->host, priv->port, &hints, &result) != 0) {
         g_warning ("Error resolving host '%s'", priv->host);
-        return sock;
+        return FALSE;
     }
 
     for (rp = result; rp; rp = rp->ai_next) {
