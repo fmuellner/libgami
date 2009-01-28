@@ -1193,7 +1193,7 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
     priv->response_func = response_func;
     priv->response_data = response_data;
 
-    action = g_string_new ("Action: QueueAdd\r\n");
+    action = g_string_new ("Action: QueuePause\r\n");
     g_string_append_printf (action, "Interface: %s\r\nPaused: %d\r\n",
                             interface, paused ? 1: 0);
 
