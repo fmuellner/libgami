@@ -91,6 +91,7 @@ static guint signals [LAST_SIGNAL];
 G_DEFINE_TYPE (GamiManager, gami_manager, G_TYPE_OBJECT);
 
 static gboolean gami_manager_new_async_cb (GamiManagerNewAsyncData *data);
+static gboolean parse_connection_string (GamiManager *ami, GError **error);
 static gchar *event_string_from_mask (GamiManager *ami, GamiEventMask mask);
 
 static gboolean reconnect_socket (GamiManager *ami);
@@ -167,8 +168,6 @@ gami_manager_new (const gchar *host, const gchar *port)
     GamiManager *ami;
     GamiManagerPrivate *priv;
     GError  *error = NULL;
-    gchar   *welcome_message;
-    gchar  **split_version;
 
     ami = g_object_new (GAMI_TYPE_MANAGER,
                         "host", host,
@@ -176,32 +175,14 @@ gami_manager_new (const gchar *host, const gchar *port)
                         NULL);
     priv = GAMI_MANAGER_PRIVATE (ami);
 
-    priv->host = g_strdup (host);
-    priv->port = g_strdup (port);
-
-    if (! gami_manager_connect (ami)) {
-        g_warning ("Failed to connect to the server");
+    if (! gami_manager_connect (ami, &error)) {
+        g_warning ("Failed to connect to the server%s%s",
+                   error ? ": " : "",
+                   error ? error->message : "");
 
         g_object_unref (ami);
         return NULL;
     }
-
-    /* read welcome message and set API */
-    g_io_channel_read_line (priv->socket, &welcome_message, NULL, NULL, &error);
-    if (error) {
-        g_debug ("Error connecting to manager: %s", error->message);
-        g_error_free (error);
-        g_free (welcome_message);
-        return NULL;
-    }
-    ami->api_version = g_strdup (g_strchomp (g_strrstr (welcome_message,
-                                                        "/") + 1));
-    g_free (welcome_message);
-
-    split_version = g_strsplit (ami->api_version, ".", 2);
-    ami->api_major = atoi (split_version [0]);
-    ami->api_minor = atoi (split_version [1]);
-    g_free (split_version);
 
     return ami;
 }
@@ -237,6 +218,7 @@ gami_manager_new_async (const gchar *host, const gchar *port,
 /**
  * gami_manager_connect:
  * @ami: #GamiManager
+ * @error: A location to return an error of type #GIOChannelError
  *
  * Connect #GamiManager with the Asterisk server defined by the object 
  * properties #GamiManager:host and #GamiManager:port.
@@ -249,7 +231,7 @@ gami_manager_new_async (const gchar *host, const gchar *port,
  */
 /* FIXME: I have no idea if I got the w32 stuff right */
 gboolean
-gami_manager_connect (GamiManager *ami)
+gami_manager_connect (GamiManager *ami, GError **error)
 {
     GamiManagerPrivate *priv;
     struct addrinfo hints;
@@ -259,6 +241,8 @@ gami_manager_connect (GamiManager *ami)
 #else
     int sock = -1;
 #endif
+
+    g_assert (error == NULL || *error == NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
@@ -319,10 +303,12 @@ gami_manager_connect (GamiManager *ami)
     g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
                     (GIOFunc) dispatch_ami, ami);
 
-    priv->connected = TRUE;
-    g_signal_emit (ami, signals [CONNECTED], 0);
+    if (parse_connection_string (ami, error)) {
+        priv->connected = TRUE;
+        g_signal_emit (ami, signals [CONNECTED], 0);
+    }
 
-    return TRUE;
+    return priv->connected;
 }
 
 /*
@@ -4753,6 +4739,36 @@ gami_manager_new_async_cb (GamiManagerNewAsyncData *data)
     return FALSE; /* for g_idle_add() */
 }
 
+static gboolean
+parse_connection_string (GamiManager *ami, GError **error)
+{
+    GamiManagerPrivate *priv;
+    /* read welcome message and set API */
+    gchar   *welcome_message;
+    gchar  **split_version;
+
+    g_assert (ami != NULL && GAMI_IS_MANAGER (ami));
+    g_assert (error == NULL || *error == NULL);
+
+    priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_io_channel_read_line (priv->socket, &welcome_message, NULL, NULL, error);
+    if (*error) {
+        g_free (welcome_message);
+        return FALSE;
+    }
+    ami->api_version = g_strdup (g_strchomp (g_strrstr (welcome_message,
+                                                        "/") + 1));
+    g_free (welcome_message);
+
+    split_version = g_strsplit (ami->api_version, ".", 2);
+    ami->api_major = atoi (split_version [0]);
+    ami->api_minor = atoi (split_version [1]);
+    g_free (split_version);
+
+    return TRUE;
+}
+
 static gchar *
 event_string_from_mask (GamiManager *mgr, GamiEventMask mask)
 {
@@ -4916,6 +4932,7 @@ static gboolean
 reconnect_socket (GamiManager *ami)
 {
     GamiManagerPrivate *priv;
+    GError *error = NULL;
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
@@ -4923,7 +4940,8 @@ reconnect_socket (GamiManager *ami)
     g_io_channel_shutdown (priv->socket, TRUE, NULL);
     g_io_channel_unref (priv->socket);
 
-    return ! gami_manager_connect (ami);  /* try again if connection failed */
+    return ! gami_manager_connect (ami, &error); /* try again if connection
+                                                    failed */
 }
 
 static gboolean
