@@ -49,11 +49,6 @@
  * implementations as gtk_main().
  */
 
-struct _GamiManagerClass
-{
-    GObjectClass parent_class;
-};
-
 typedef struct _GamiManagerPrivate GamiManagerPrivate;
 struct _GamiManagerPrivate
 {

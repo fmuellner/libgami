@@ -196,6 +196,13 @@ struct _GamiManager
 	guint  api_minor;
 };
 
+struct _GamiManagerClass
+{
+    GObjectClass parent_class;
+    gboolean (*connect) (const gchar *host, const gchar *port);
+};
+
+
 /**
  * GamiResponseFunc:
  * @response: the action's #GamiResponse.
