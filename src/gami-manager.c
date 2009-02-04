@@ -53,11 +53,9 @@ typedef struct _GamiManagerPrivate GamiManagerPrivate;
 struct _GamiManagerPrivate
 {
     GIOChannel *socket;
-    gboolean block_events;
+    gboolean connected;
     gchar *host;
     gchar *port;
-    gchar *username;
-    gchar *secret;
 
     GamiResponseFunc response_func;
     GamiResponse *(*response_value_func) (GamiManager *ami, GHashTable *resp);
@@ -77,6 +75,11 @@ struct _GamiManagerNewAsyncData {
 };
 
 enum {
+    HOST_PROP = 1,
+    PORT_PROP
+};
+
+enum {
     CONNECTED,
     DISCONNECTED,
     EVENT,
@@ -90,7 +93,6 @@ G_DEFINE_TYPE (GamiManager, gami_manager, G_TYPE_OBJECT);
 static gboolean gami_manager_new_async_cb (GamiManagerNewAsyncData *data);
 static gchar *event_string_from_mask (GamiManager *ami, GamiEventMask mask);
 
-static gboolean connect_socket (GamiManager *ami);
 static gboolean reconnect_socket (GamiManager *ami);
 
 static GIOStatus send_command (GIOChannel *c, const gchar *cmd, GError **e);
@@ -167,13 +169,16 @@ gami_manager_new (const gchar *host, const gchar *port)
     gchar   *welcome_message;
     gchar  **split_version;
 
-    ami = g_object_new (GAMI_TYPE_MANAGER, NULL);
+    ami = g_object_new (GAMI_TYPE_MANAGER,
+                        "host", host,
+                        "port", port,
+                        NULL);
     priv = GAMI_MANAGER_PRIVATE (ami);
 
     priv->host = g_strdup (host);
     priv->port = g_strdup (port);
 
-    if (! connect_socket (ami)) {
+    if (! gami_manager_connect (ami)) {
         g_warning ("Failed to connect to the server");
 
         g_object_unref (ami);
@@ -227,6 +232,98 @@ gami_manager_new_async (const gchar *host, const gchar *port,
     else
         g_idle_add ((GSourceFunc) gami_manager_new_async_cb, data);
 }
+
+/**
+ * gami_manager_connect:
+ * @ami: #GamiManager
+ *
+ * Connect #GamiManager with the Asterisk server defined by the object 
+ * properties :host and :port.
+ *
+ * Note that it is not usually necessary to call this function, as it is called
+ * by gami_manager_new() and gami_manager_new_async(). Use it only in classes 
+ * inheritting from #GamiManager.
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+/* FIXME: I have no idea if I got the w32 stuff right */
+gboolean
+gami_manager_connect (GamiManager *ami)
+{
+    GamiManagerPrivate *priv;
+    struct addrinfo hints;
+    struct addrinfo *rp, *result;
+#ifdef G_OS_WIN32
+    SOCKET sock = INVALID_SOCKET;
+#else
+    int sock = -1;
+#endif
+
+    priv = GAMI_MANAGER_PRIVATE (ami);
+
+#ifdef G_OS_WIN32
+    ZeroMemory (&hints, sizeof (hints));
+#else
+    memset (&hints, 0, sizeof (struct addrinfo));
+#endif
+    hints.ai_family = AF_UNSPEC;
+    hints.ai_socktype = SOCK_STREAM;
+    //hints.ai_protocol = IPPROTO_TCP;
+
+    if (getaddrinfo (priv->host, priv->port, &hints, &result) != 0) {
+        g_warning ("Error resolving host '%s'", priv->host);
+        return FALSE;
+    }
+
+    for (rp = result; rp; rp = rp->ai_next) {
+        sock = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
+
+#ifdef G_OS_WIN32
+        if (sock == INVALID_SOCKET)
+            continue;
+#else
+        if (sock == -1)
+            continue;
+#endif
+
+        if (connect (sock, rp->ai_addr, rp->ai_addrlen) != -1)
+            break;   /* Bingo! */
+
+#ifdef G_OS_WIN32
+        closesocket (sock);
+        sock = INVALID_SOCKET;
+#else
+        close (sock);
+        sock = -1;
+#endif
+    }
+
+
+    if (rp == NULL) {
+        /* FIXME: do something */
+        /* Error */
+        freeaddrinfo (result);
+
+        return FALSE;
+    }
+
+    freeaddrinfo (result);
+
+#ifdef G_OS_WIN32
+    priv->socket = g_io_channel_win32_new_socket (sock);
+#else
+    priv->socket = g_io_channel_unix_new (sock);
+#endif
+
+    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
+                    (GIOFunc) dispatch_ami, ami);
+
+    priv->connected = TRUE;
+    g_signal_emit (ami, signals [CONNECTED], 0);
+
+    return TRUE;
+}
+
 /*
  * Login/Logoff
  */
@@ -272,17 +369,11 @@ gami_manager_login (GamiManager *ami, const gchar *username,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
-
-    if (priv->username)
-        g_free (priv->username);
-    priv->username = g_strdup (username);
-
-    if (priv->secret)
-        g_free (priv->secret);
-    priv->secret = g_strdup (secret);
 
     action = g_string_new ("Action: Login\r\n");
     if (auth_type)
@@ -336,6 +427,8 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_logoff_response;
     priv->response_func = response_func;
@@ -394,6 +487,8 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_getvar_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -449,6 +544,8 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
     g_assert (variable != NULL && value != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -509,6 +606,8 @@ gami_manager_module_check (GamiManager *ami, const gchar *module,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -560,6 +659,8 @@ gami_manager_module_load (GamiManager *ami, const gchar *module,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -634,6 +735,8 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -693,6 +796,8 @@ gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -745,6 +850,8 @@ gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -796,6 +903,8 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -846,6 +955,8 @@ gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
     g_assert (channel != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -904,6 +1015,8 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -957,6 +1070,8 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1008,6 +1123,8 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_meetmelist_response;
     priv->response_func = response_func;
@@ -1070,6 +1187,8 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1128,6 +1247,8 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1183,6 +1304,8 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
     g_assert (interface != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -1242,6 +1365,8 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1297,6 +1422,8 @@ gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_queuelist_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1350,6 +1477,8 @@ gami_manager_queue_log (GamiManager *ami, const gchar *queue,
     g_assert (queue != NULL && event != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -1497,6 +1626,8 @@ gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1549,6 +1680,8 @@ gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1599,6 +1732,8 @@ gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
     g_assert (zap_channel != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -1652,6 +1787,8 @@ gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1701,6 +1838,8 @@ gami_manager_zap_show_channels (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_zaplist_response;
     priv->response_func = response_func;
@@ -1753,6 +1892,8 @@ gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1801,6 +1942,8 @@ gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -1859,6 +2002,8 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1912,6 +2057,8 @@ gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -1963,6 +2110,8 @@ gami_manager_dahdi_dnd_on (GamiManager *ami, const gchar *dahdi_channel,
     g_assert (dahdi_channel != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -2016,6 +2165,8 @@ gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2067,6 +2218,8 @@ gami_manager_dahdi_show_channels (GamiManager *ami, const gchar *dahdi_channel,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_dahdilist_response;
     priv->response_func = response_func;
@@ -2121,6 +2274,8 @@ gami_manager_dahdi_transfer (GamiManager *ami, const gchar *dahdi_channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2169,6 +2324,8 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -2223,6 +2380,8 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_agentlist_response;
     priv->response_func = response_func;
@@ -2284,6 +2443,8 @@ gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2342,6 +2503,8 @@ gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2399,6 +2562,8 @@ gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_dbget_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2452,6 +2617,8 @@ gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
     g_assert (family != NULL && key != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -2507,6 +2674,8 @@ gami_manager_db_del (GamiManager *ami, const gchar *family, const gchar *key,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2558,6 +2727,8 @@ gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
     g_assert (family != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -2619,6 +2790,8 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2671,6 +2844,8 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_parklist_response;
     priv->response_func = response_func;
@@ -2726,6 +2901,8 @@ gami_manager_voicemail_users_list (GamiManager *ami, const gchar *action_id,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_voicemaillist_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2777,6 +2954,8 @@ gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2827,6 +3006,8 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
     g_assert (mailbox != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
@@ -2882,6 +3063,8 @@ gami_manager_core_status (GamiManager *ami, const gchar *action_id,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2931,6 +3114,8 @@ gami_manager_core_show_channels (GamiManager *ami, const gchar *action_id,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_showchannelslist_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -2978,6 +3163,8 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
@@ -3032,6 +3219,8 @@ gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_iaxlist_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3080,6 +3269,8 @@ gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_siplist_response;
     priv->response_func = response_func;
@@ -3132,6 +3323,8 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3180,6 +3373,8 @@ gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_sipregistrylist_response;
     priv->response_func = response_func;
@@ -3231,6 +3426,8 @@ gami_manager_status (GamiManager *ami, const gchar *channel,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_statuslist_response;
     priv->response_func = response_func;
@@ -3288,6 +3485,8 @@ gami_manager_extension_state (GamiManager *ami, const gchar *exten,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3337,6 +3536,8 @@ gami_manager_ping (GamiManager *ami, const gchar *action_id,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = (ami->api_major
                                  && ami->api_minor) ? get_bool_response
@@ -3391,6 +3592,8 @@ gami_manager_absolute_timeout (GamiManager *ami, const gchar *channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3441,6 +3644,8 @@ gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
     g_assert (auth_type != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_challenge_response;
     priv->response_func = response_func;
@@ -3497,6 +3702,8 @@ gami_manager_set_cdr_user_field (GamiManager *ami, const gchar *channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3550,6 +3757,8 @@ gami_manager_reload (GamiManager *ami, const gchar *module,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3602,6 +3811,8 @@ gami_manager_hangup (GamiManager *ami, const gchar *channel,
     g_assert (channel != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -3661,6 +3872,8 @@ gami_manager_redirect (GamiManager *ami, const gchar *channel,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3717,6 +3930,8 @@ gami_manager_bridge (GamiManager *ami, const gchar *channel1,
     g_assert (channel1 != NULL && channel2 != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -3775,6 +3990,8 @@ gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3830,6 +4047,8 @@ gami_manager_send_text (GamiManager *ami, const gchar *channel,
     g_assert (channel != NULL && message != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -3887,6 +4106,8 @@ gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3941,6 +4162,8 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -3994,6 +4217,8 @@ gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -4045,6 +4270,8 @@ gami_manager_list_categories (GamiManager *ami, const gchar *filename,
     g_assert (filename != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
@@ -4098,6 +4325,8 @@ gami_manager_get_config (GamiManager *ami, const gchar *filename,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -4150,6 +4379,8 @@ gami_manager_get_config_json (GamiManager *ami, const gchar *filename,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = get_hash_response;
     priv->response_func = response_func;
     priv->response_data = response_data;
@@ -4200,6 +4431,8 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
     g_assert (filename != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -4273,6 +4506,8 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
     g_assert (application_exten != NULL && data_context != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -4352,6 +4587,8 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
+    g_assert (priv->connected == TRUE);
+
     priv->response_value_func = (ami->api_major
                                  && ami->api_minor) ? get_bool_response
         : get_events_response;
@@ -4409,6 +4646,8 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
     g_assert (user_event != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -4470,6 +4709,8 @@ gami_manager_wait_event (GamiManager *ami, guint timeout,
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
 
     priv = GAMI_MANAGER_PRIVATE (ami);
+
+    g_assert (priv->connected == TRUE);
 
     priv->response_value_func = get_bool_response;
     priv->response_func = response_func;
@@ -4568,83 +4809,6 @@ event_string_from_mask (GamiManager *mgr, GamiEventMask mask)
     }
 
     return g_string_free (events, FALSE);
-}
-
-/* note: I have no idea if I got the w32 stuff right */
-static gboolean
-connect_socket (GamiManager *ami)
-{
-    GamiManagerPrivate *priv;
-    struct addrinfo hints;
-    struct addrinfo *rp, *result;
-#ifdef G_OS_WIN32
-    SOCKET sock = INVALID_SOCKET;
-#else
-    int sock = -1;
-#endif
-
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-#ifdef G_OS_WIN32
-    ZeroMemory (&hints, sizeof (hints));
-#else
-    memset (&hints, 0, sizeof (struct addrinfo));
-#endif
-    hints.ai_family = AF_UNSPEC;
-    hints.ai_socktype = SOCK_STREAM;
-    //hints.ai_protocol = IPPROTO_TCP;
-
-    if (getaddrinfo (priv->host, priv->port, &hints, &result) != 0) {
-        g_warning ("Error resolving host '%s'", priv->host);
-        return FALSE;
-    }
-
-    for (rp = result; rp; rp = rp->ai_next) {
-        sock = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
-
-#ifdef G_OS_WIN32
-        if (sock == INVALID_SOCKET)
-            continue;
-#else
-        if (sock == -1)
-            continue;
-#endif
-
-        if (connect (sock, rp->ai_addr, rp->ai_addrlen) != -1)
-            break;   /* Bingo! */
-
-#ifdef G_OS_WIN32
-        closesocket (sock);
-        sock = INVALID_SOCKET;
-#else
-        close (sock);
-        sock = -1;
-#endif
-    }
-
-
-    if (rp == NULL) {
-        /* FIXME: do something */
-        /* Error */
-        freeaddrinfo (result);
-
-        return FALSE;
-    }
-
-    freeaddrinfo (result);
-
-#ifdef G_OS_WIN32
-    priv->socket = g_io_channel_win32_new_socket (sock);
-#else
-    priv->socket = g_io_channel_unix_new (sock);
-#endif
-
-    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
-                    (GIOFunc) dispatch_ami, ami);
-
-    g_signal_emit (ami, signals [CONNECTED], 0);
-
-    return TRUE;
 }
 
 static GIOStatus
@@ -4755,7 +4919,7 @@ reconnect_socket (GamiManager *ami)
     g_io_channel_shutdown (priv->socket, TRUE, NULL);
     g_io_channel_unref (priv->socket);
 
-    return ! connect_socket (ami);  /* try again if connection failed */
+    return ! gami_manager_connect (ami);  /* try again if connection failed */
 }
 
 static gboolean
@@ -4767,6 +4931,7 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
 
     if (cond == G_IO_HUP || cond == G_IO_ERR) {
 
+        priv->connected = FALSE;
         g_signal_emit (mgr, signals [DISCONNECTED], 0);
         g_idle_add ((GSourceFunc) reconnect_socket, mgr);
 
@@ -5603,8 +5768,7 @@ gami_manager_init (GamiManager *object)
     GamiManagerPrivate *priv;
 
     priv = GAMI_MANAGER_PRIVATE (object);
-
-    priv->block_events = FALSE;
+    priv->connected = FALSE;
 }
 
 static void
@@ -5631,13 +5795,82 @@ gami_manager_finalize (GObject *object)
 }
 
 static void
+gami_manager_get_property (GObject *obj, guint prop_id,
+                           GValue *value, GParamSpec *pspec)
+{
+    GamiManager        *gami = (GamiManager *) obj;
+    GamiManagerPrivate *priv = GAMI_MANAGER_PRIVATE (gami);
+
+    switch (prop_id) {
+        case HOST_PROP:
+            g_value_set_string (value, priv->host);
+            break;
+        case PORT_PROP:
+            g_value_set_string (value, priv->port);
+            break;
+        default:
+            G_OBJECT_WARN_INVALID_PROPERTY_ID (obj, prop_id, pspec);
+            break;
+    }
+}
+
+static void
+gami_manager_set_property (GObject *obj, guint prop_id,
+                           const GValue *value, GParamSpec *pspec)
+{
+    GamiManager        *gami = (GamiManager *) obj;
+    GamiManagerPrivate *priv = GAMI_MANAGER_PRIVATE (gami);
+
+    switch (prop_id) {
+        case HOST_PROP:
+            g_free (priv->host);
+            priv->host = g_value_dup_string (value);
+            break;
+        case PORT_PROP:
+            g_free (priv->port);
+            priv->port = g_value_dup_string (value);
+            break;
+        default:
+            G_OBJECT_WARN_INVALID_PROPERTY_ID (obj, prop_id, pspec);
+            break;
+    }
+}
+
+static void
 gami_manager_class_init (GamiManagerClass *klass)
 {
-    GObjectClass* object_class = G_OBJECT_CLASS (klass);
+    GObjectClass *object_class = G_OBJECT_CLASS (klass);
+    GParamSpec   *pspec;
 
     g_type_class_add_private (klass, sizeof (GamiManagerPrivate));
 
+    object_class->set_property = gami_manager_set_property;
+    object_class->get_property = gami_manager_get_property;
     object_class->finalize = gami_manager_finalize;
+
+    /**
+     * GamiManager:host:
+     *
+     * The Asterisk manager host to connect to
+     **/
+    pspec = g_param_spec_string ("host",
+                                 "Asterisk manager host",
+                                 "Set Asterisk manager host to connect to",
+                                 "localhost",
+                                 G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE);
+    g_object_class_install_property (object_class, HOST_PROP, pspec);
+
+    /**
+     * GamiManager:port:
+     *
+     * The Asterisk manager port to connect to
+     **/
+    pspec = g_param_spec_string ("port",
+                                 "Asterisk manager port",
+                                 "Set Asterisk manager port to connect to",
+                                 "5038",
+                                 G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE);
+    g_object_class_install_property (object_class, PORT_PROP, pspec);
 
     /**
      * GamiManager::connected:

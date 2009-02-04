@@ -199,7 +199,6 @@ struct _GamiManager
 struct _GamiManagerClass
 {
     GObjectClass parent_class;
-    gboolean (*connect) (const gchar *host, const gchar *port);
 };
 
 
@@ -235,6 +234,7 @@ GamiManager *gami_manager_new (const gchar *host, const gchar *port);
 void         gami_manager_new_async (const gchar *host, const gchar *port,
 									 GamiManagerNewAsyncFunc func,
 									 gpointer user_data);
+gboolean     gami_manager_connect (GamiManager *ami);
 
 GamiResponse *gami_manager_login  (GamiManager *ami, const gchar *username,
 								   const gchar *secret, const gchar *auth_type,
