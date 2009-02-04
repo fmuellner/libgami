@@ -143,6 +143,7 @@ static gboolean get_response_list (GIOChannel *chan, GSList **list,
                                    gchar *list_event, gchar *stop_event,
                                    gchar *check_num, GError **error);
 static void join_originate_vars (gchar *key, gchar *value, GString *s);
+static void join_originate_vars_legacy (gchar *key, gchar *value, GString *s);
 static void join_user_event_headers (gchar *key, gchar *value, GString *s);
 
 /*
@@ -4530,11 +4531,14 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
     if (account)
         g_string_append_printf (action, "Account: %s\r\n", account);
     if (variables) {
+        GHFunc join_func;
         GString *vars = g_string_new ("");
         gchar *var_str;
 
-        g_hash_table_foreach ((GHashTable *) variables,
-                              (GHFunc) join_originate_vars, vars);
+        join_func = (ami->api_major
+                     && ami->api_minor) ? (GHFunc) join_originate_vars
+                                        : (GHFunc) join_originate_vars_legacy;
+        g_hash_table_foreach ((GHashTable *) variables, join_func, vars);
         var_str = g_string_free (vars, FALSE);
         g_string_append_printf (action, "Variable: %s\r\n", var_str);
         g_free (var_str);
@@ -5748,6 +5752,11 @@ get_response_list (GIOChannel *chan, GSList **list, gchar *list_event,
 }
 
 static void join_originate_vars (gchar *key, gchar *value, GString *s)
+{
+    g_string_append_printf (s, "%s%s=%s", (s->len == 0)?"":",", key, value);
+}
+
+static void join_originate_vars_legacy (gchar *key, gchar *value, GString *s)
 {
     g_string_append_printf (s, "%s%s=%s", (s->len == 0)?"":"|", key, value);
 }
