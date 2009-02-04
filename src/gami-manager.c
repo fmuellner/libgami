@@ -238,7 +238,7 @@ gami_manager_new_async (const gchar *host, const gchar *port,
  * @ami: #GamiManager
  *
  * Connect #GamiManager with the Asterisk server defined by the object 
- * properties :host and :port.
+ * properties #GamiManager:host and #GamiManager:port.
  *
  * Note that it is not usually necessary to call this function, as it is called
  * by gami_manager_new() and gami_manager_new_async(). Use it only in classes 
