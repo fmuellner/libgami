@@ -314,23 +314,23 @@ GamiResponse *gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
 										gpointer response_data, GError **error);
 
 GamiResponse *gami_manager_queue_add (GamiManager *ami, const gchar *queue,
-									  const gchar *interface, guint penalty,
+									  const gchar *iface, guint penalty,
 									  gboolean paused, const gchar *action_id,
 									  GamiResponseFunc response_func,
 									  gpointer response_data, GError **error);
 GamiResponse *gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
-										 const gchar *interface,
+										 const gchar *iface,
 										 const gchar *action_id,
 										 GamiResponseFunc response_func,
 										 gpointer response_data,
 										 GError **error);
 GamiResponse *gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
-										const gchar *interface, gboolean paused,
+										const gchar *iface, gboolean paused,
 										const gchar *action_id,
 										GamiResponseFunc response_func,
 										gpointer response_data, GError **error);
 GamiResponse *gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
-										  const gchar *interface, guint penalty,
+										  const gchar *iface, guint penalty,
 										  const gchar *action_id,
 										  GamiResponseFunc response_func,
 										  gpointer response_data,

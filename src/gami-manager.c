@@ -17,12 +17,23 @@
  * with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
+#include <config.h>
+
 #include <stdlib.h>
 #include <unistd.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
 #include <string.h>
+#include <sys/types.h>
+#include <glib.h>
+#include <glib-object.h>
+#ifdef G_OS_WIN32
+#  define WINVER 0x0501
+#  include <windef.h>
+#  include <winsock2.h>
+#  include <ws2tcpip.h>
+#else
+#  include <sys/socket.h>
+#  include <netdb.h>
+#endif
 
 #include <gami-manager.h>
 
@@ -1143,9 +1154,9 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
  * gami_manager_queue_add:
  * @ami: #GamiManager
  * @queue: Existing queue to add member
- * @interface: Member interface to add to @queue
+ * @iface: Member interface to add to @queue
  * @penalty: Penalty for new member
- * @paused: whether @interface should be initially paused
+ * @paused: whether @iface should be initially paused
  * @action_id: (optional) ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
@@ -1153,13 +1164,13 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
  *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
- * Add @interface to @queue
+ * Add @iface to @queue
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
 GamiResponse *
 gami_manager_queue_add (GamiManager *ami, const gchar *queue,
-                        const gchar *interface, guint penalty, gboolean paused,
+                        const gchar *iface, guint penalty, gboolean paused,
                         const gchar *action_id, GamiResponseFunc response_func,
                         gpointer response_data, GError **error)
 {
@@ -1170,7 +1181,7 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
 
     g_assert (error == NULL || *error == NULL);
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
-    g_assert (queue != NULL && interface != NULL);
+    g_assert (queue != NULL && iface != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
@@ -1182,7 +1193,7 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
 
     action = g_string_new ("Action: QueueAdd\r\n");
     g_string_append_printf (action, "Queue: %s\r\nInterface: %s\r\n",
-                            queue, interface);
+                            queue, iface);
 
     if (penalty)
         g_string_append_printf (action, "Penalty: %d\r\n", penalty);
@@ -1205,7 +1216,7 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
  * gami_manager_queue_remove:
  * @ami: #GamiManager
  * @queue: Existing queue to remove member from
- * @interface: Member interface to remove from @queue
+ * @iface: Member interface to remove from @queue
  * @action_id: (optional) ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
@@ -1213,15 +1224,15 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
  *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
- * Remove @interface from @queue
+ * Remove @iface from @queue
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
 GamiResponse *
 gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
-                           const gchar *interface, const gchar *action_id,
-                           GamiResponseFunc response_func,
-                           gpointer response_data, GError **error)
+						   const gchar *iface, const gchar *action_id,
+						   GamiResponseFunc response_func,
+						   gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1230,7 +1241,7 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
 
     g_assert (error == NULL || *error == NULL);
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
-    g_assert (queue != NULL && interface != NULL);
+    g_assert (queue != NULL && iface != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
@@ -1242,7 +1253,7 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
 
     action = g_string_new ("Action: QueueRemove\r\n");
     g_string_append_printf (action, "Queue: %s\r\nInterface: %s\r\n",
-                            queue, interface);
+                            queue, iface);
 
     if (action_id)
         g_string_append_printf (action, "ActionID: %s\r\n", action_id);
@@ -1260,9 +1271,9 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
 /**
  * gami_manager_queue_pause:
  * @ami: #GamiManager
- * @queue: (optional) Existing queue for which @interface should be (un)paused
- * @interface: Member interface (un)pause
- * @paused: Whether to pause or unpause @interface
+ * @queue: (optional) Existing queue for which @iface should be (un)paused
+ * @iface: Member interface (un)pause
+ * @paused: Whether to pause or unpause @iface
  * @action_id: (optional) ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
@@ -1270,13 +1281,13 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
  *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
- * (Un)pause @interface
+ * (Un)pause @iface
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
 GamiResponse *
 gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
-                          const gchar *interface, gboolean paused,
+                          const gchar *iface, gboolean paused,
                           const gchar *action_id,
                           GamiResponseFunc response_func, 
                           gpointer response_data, GError **error)
@@ -1288,7 +1299,7 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
 
     g_assert (error == NULL || *error == NULL);
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
-    g_assert (interface != NULL);
+    g_assert (iface != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
@@ -1300,7 +1311,7 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
 
     action = g_string_new ("Action: QueuePause\r\n");
     g_string_append_printf (action, "Interface: %s\r\nPaused: %d\r\n",
-                            interface, paused ? 1: 0);
+                            iface, paused ? 1: 0);
 
     if (queue)
         g_string_append_printf (action, "Queue: %s\r\n", queue);
@@ -1321,8 +1332,8 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
  * gami_manager_queue_penalty:
  * @ami: #GamiManager
  * @queue: (optional) Limit @penalty change to existing queue
- * @interface: Member interface change penalty for
- * @penalty: New penalty to set for @interface
+ * @iface: Member interface change penalty for
+ * @penalty: New penalty to set for @iface
  * @action_id: (optional) ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
@@ -1330,13 +1341,13 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
  *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
- * Change the penalty value of @interface
+ * Change the penalty value of @iface
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
 GamiResponse *
 gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
-                            const gchar *interface, guint penalty,
+                            const gchar *iface, guint penalty,
                             const gchar *action_id,
                             GamiResponseFunc response_func,
                             gpointer response_data, GError **error)
@@ -1348,7 +1359,7 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
 
     g_assert (error == NULL || *error == NULL);
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
-    g_assert (interface != NULL);
+    g_assert (iface != NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
@@ -1360,7 +1371,7 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
 
     action = g_string_new ("Action: QueuePenalty\r\n");
     g_string_append_printf (action, "Interface: %s\r\nPenalty: %d\r\n",
-                            interface, penalty);
+                            iface, penalty);
 
     if (queue)
         g_string_append_printf (action, "Queue: %s\r\n", queue);
@@ -2027,7 +2038,7 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-    GamiResponse *
+GamiResponse *
 gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
                            const gchar *action_id,
                            GamiResponseFunc response_func,
