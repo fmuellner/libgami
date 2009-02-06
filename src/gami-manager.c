@@ -30,9 +30,15 @@
 #  include <windef.h>
 #  include <winsock2.h>
 #  include <ws2tcpip.h>
+#  define CLOSESOCKET(S) closesocket (S)
+#  define G_SOCKET_IO_CHANNEL_NEW(S) g_io_channel_win32_new_socket (S)
 #else
 #  include <sys/socket.h>
 #  include <netdb.h>
+#  define SOCKET gint
+#  define INVALID_SOCKET -1
+#  define CLOSESOCKET(S) close (S)
+#  define G_SOCKET_IO_CHANNEL_NEW(S) g_io_channel_unix_new (S)
 #endif
 
 #include <gami-manager.h>
@@ -246,52 +252,37 @@ gami_manager_connect (GamiManager *ami, GError **error)
 {
     GamiManagerPrivate *priv;
     struct addrinfo hints;
-    struct addrinfo *rp, *result;
-#ifdef G_OS_WIN32
+    struct addrinfo *rp, *result = NULL;
+    int rv;
+
     SOCKET sock = INVALID_SOCKET;
-#else
-    int sock = -1;
-#endif
 
     g_assert (error == NULL || *error == NULL);
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
-#ifdef G_OS_WIN32
-    ZeroMemory (&hints, sizeof (hints));
-#else
     memset (&hints, 0, sizeof (struct addrinfo));
-#endif
     hints.ai_family = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
-    //hints.ai_protocol = IPPROTO_TCP;
+    hints.ai_protocol = IPPROTO_TCP;
 
-    if (getaddrinfo (priv->host, priv->port, &hints, &result) != 0) {
-        g_warning ("Error resolving host '%s'", priv->host);
+    if ((rv = getaddrinfo (priv->host, priv->port, &hints, &result)) != 0) {
+        g_warning ("Error resolving host '%s': %s", priv->host,
+				   gai_strerror (rv));
         return FALSE;
     }
 
     for (rp = result; rp; rp = rp->ai_next) {
         sock = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
 
-#ifdef G_OS_WIN32
         if (sock == INVALID_SOCKET)
             continue;
-#else
-        if (sock == -1)
-            continue;
-#endif
 
         if (connect (sock, rp->ai_addr, rp->ai_addrlen) != -1)
             break;   /* Bingo! */
 
-#ifdef G_OS_WIN32
-        closesocket (sock);
+        CLOSESOCKET (sock);
         sock = INVALID_SOCKET;
-#else
-        close (sock);
-        sock = -1;
-#endif
     }
 
 
@@ -305,11 +296,7 @@ gami_manager_connect (GamiManager *ami, GError **error)
 
     freeaddrinfo (result);
 
-#ifdef G_OS_WIN32
-    priv->socket = g_io_channel_win32_new_socket (sock);
-#else
-    priv->socket = g_io_channel_unix_new (sock);
-#endif
+    priv->socket = G_SOCKET_IO_CHANNEL_NEW (sock);
 
     g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
                     (GIOFunc) dispatch_ami, ami);
