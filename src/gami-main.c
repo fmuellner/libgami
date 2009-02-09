@@ -25,8 +25,9 @@
 #include <gami-main.h>
 
 #ifdef G_OS_WIN32
-#include <ws2tcpip.h>
+#  include <ws2tcpip.h>
 #endif
+
 
 /**
  * SECTION: gami-main
@@ -126,12 +127,12 @@ void
 gami_init (int *argc, char ***argv)
 {
 #ifdef G_OS_WIN32
-    WSAData wsaData;
+    WSADATA wsaData;
 
     if (WSAStartup (MAKEWORD (2, 0), &wsaData) != 0)
         g_error ("Failed to initialize WinSock stack");
 
-    if (LOBYTE (wsaData.wVersion) != 2 || HIBYTE (wsaData.wVersion= != 0)) {
+    if (LOBYTE (wsaData.wVersion) != 2 || HIBYTE (wsaData.wVersion) != 0) {
         WSACleanup ();
         g_error ("No usable version of WinSock DLL found.");
     }
