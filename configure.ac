@@ -2,7 +2,7 @@ dnl Process this file with autoconf to produce a configure script.
 dnl Created by Anjuta application wizard.
 
 AC_INIT(gami, 0.3)
-
+AC_CANONICAL_SYSTEM
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
 AC_CONFIG_HEADERS([config.h])
 
@@ -10,6 +10,23 @@ AC_ISC_POSIX
 AC_PROG_CC
 AM_PROG_CC_STDC
 AC_HEADER_STDC
+
+
+dnl ***************************************************************************
+dnl Win32
+dnl ***************************************************************************
+AC_MSG_CHECKING([for Win32])
+case "$host" in
+  *-*-mingw*)
+    gami_native_win32=yes
+  ;;
+  *)
+    gami_native_win32=no
+  ;;
+esac
+AC_MSG_RESULT([$gami_native_win32])
+AM_CONDITIONAL(OS_WIN32, [test "$gami_native_win32" = "yes"])
+
 
 dnl ***************************************************************************
 dnl Internatinalization

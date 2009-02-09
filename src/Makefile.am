@@ -1,3 +1,8 @@
+if OS_WIN32
+no_undefined = -no-undefined
+lws2_32 = -lws2_32
+endif
+
 INCLUDES =                                         \
 	   -DG_LOG_DOMAIN=\"Gami\"                 \
 	   -DGAMI_COMPILATION                      \
@@ -19,8 +24,9 @@ libgami_1_0_la_SOURCES = \
 
 AM_CPPFLAGS = -Wall
 
-libgami_1_0_la_LIBADD = \
-	$(GAMI_LIBS)
+libgami_1_0_la_LDFLAGS = \
+	$(no_undefined)  \
+	$(GAMI_LIBS) $(lws2_32)
 
 BUILT_GIRSOURCES = GAmi-1.0.gir
 
