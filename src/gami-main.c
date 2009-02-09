@@ -19,9 +19,14 @@
 
 #include "config.h"
 
+#include <glib.h>
 #include <glib/gi18n-lib.h>
 #include <locale.h>
 #include <gami-main.h>
+
+#ifdef G_OS_WIN32
+#include <ws2tcpip.h>
+#endif
 
 /**
  * SECTION: gami-main
@@ -113,11 +118,25 @@ gami_get_option_group (void)
  * code will never see those arguments.
  *
  * Debug messages in the library will be disabled by default, to get them
- * back, install a log handler using g_log_set_handler() for the domain "Gami"
+ * back, install a log handler using g_log_set_handler() for the domain "Gami".
+ *
+ * On Windows, the network stack is initialized as well.
  */
 void
 gami_init (int *argc, char ***argv)
 {
+#ifdef G_OS_WIN32
+    WSAData wsaData;
+
+    if (WSAStartup (MAKEWORD (2, 0), &wsaData) != 0)
+        g_error ("Failed to initialize WinSock stack");
+
+    if (LOBYTE (wsaData.wVersion) != 2 || HIBYTE (wsaData.wVersion= != 0)) {
+        WSACleanup ();
+        g_error ("No usable version of WinSock DLL found.");
+    }
+#endif
+
     g_log_set_handler ("Gami", G_LOG_LEVEL_DEBUG, null_log, NULL);
     gami_parse_args (argc, argv);
 }
