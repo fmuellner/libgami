@@ -298,13 +298,13 @@ gami_manager_connect (GamiManager *ami, GError **error)
 
     priv->socket = G_SOCKET_IO_CHANNEL_NEW (sock);
 
-    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
-                    (GIOFunc) dispatch_ami, ami);
-
     if (parse_connection_string (ami, error)) {
         priv->connected = TRUE;
         g_signal_emit (ami, signals [CONNECTED], 0);
     }
+
+    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
+                    (GIOFunc) dispatch_ami, ami);
 
     return priv->connected;
 }
