@@ -278,7 +278,7 @@ gami_manager_connect (GamiManager *ami, GError **error)
         if (sock == INVALID_SOCKET)
             continue;
 
-        if (connect (sock, rp->ai_addr, rp->ai_addrlen) != -1)
+        if (connect (sock, rp->ai_addr, rp->ai_addrlen) == 0)
             break;   /* Bingo! */
 
         CLOSESOCKET (sock);
