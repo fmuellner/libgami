@@ -4741,6 +4741,7 @@ static gboolean
 parse_connection_string (GamiManager *ami, GError **error)
 {
     GamiManagerPrivate *priv;
+    GIOStatus status;
     /* read welcome message and set API */
     gchar   *welcome_message;
     gchar  **split_version;
@@ -4750,8 +4751,10 @@ parse_connection_string (GamiManager *ami, GError **error)
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
-    g_io_channel_read_line (priv->socket, &welcome_message, NULL, NULL, error);
-    if (*error) {
+    while ((status = g_io_channel_read_line (priv->socket, &welcome_message,
+                                             NULL, NULL,
+                                             error)) == G_IO_STATUS_AGAIN);
+    if (status != G_IO_STATUS_NORMAL) {
         g_free (welcome_message);
         return FALSE;
     }
