@@ -4751,13 +4751,13 @@ parse_connection_string (GamiManager *ami, GError **error)
 
     priv = GAMI_MANAGER_PRIVATE (ami);
 
-    while ((status = g_io_channel_read_line (priv->socket, &welcome_message,
-                                             NULL, NULL,
-                                             error)) == G_IO_STATUS_AGAIN);
+    status = g_io_channel_read_line (priv->socket, &welcome_message,
+				     NULL, NULL, error);
+
     if (status != G_IO_STATUS_NORMAL) {
-        g_free (welcome_message);
         return FALSE;
     }
+
     ami->api_version = g_strdup (g_strchomp (g_strrstr (welcome_message,
                                                         "/") + 1));
     g_free (welcome_message);
