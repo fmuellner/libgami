@@ -23,22 +23,33 @@
 #include <unistd.h>
 #include <string.h>
 #include <sys/types.h>
+
 #include <glib.h>
 #include <glib-object.h>
+
 #ifdef G_OS_WIN32
-#  define WINVER 0x0501
 #  include <windef.h>
-#  include <winsock2.h>
 #  include <ws2tcpip.h>
 #  define CLOSESOCKET(S) closesocket (S)
 #  define G_SOCKET_IO_CHANNEL_NEW(S) g_io_channel_win32_new_socket (S)
 #else
 #  include <sys/socket.h>
 #  include <netdb.h>
-#  define SOCKET gint
-#  define INVALID_SOCKET -1
 #  define CLOSESOCKET(S) close (S)
 #  define G_SOCKET_IO_CHANNEL_NEW(S) g_io_channel_unix_new (S)
+#endif
+
+#ifndef SOCKET
+#  define SOCKET gint
+#endif
+
+#ifndef INVALID_SOCKET
+#  define INVALID_SOCKET -1
+#endif
+
+#ifndef HAVE_GAI_STRERROR
+#  undef gai_strerror
+#  define gai_strerror(C) ""
 #endif
 
 #include <gami-manager.h>

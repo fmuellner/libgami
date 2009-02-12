@@ -13,19 +13,44 @@ AC_HEADER_STDC
 
 
 dnl ***************************************************************************
-dnl Win32
+dnl Win32 + gai_strerror
 dnl ***************************************************************************
 AC_MSG_CHECKING([for Win32])
 case "$host" in
   *-*-mingw*)
-    gami_native_win32=yes
+    AC_MSG_RESULT([yes])
+
+    AC_DEFINE([WINVER],[0x0501],[Set required API version when on windows])
+    LDFLAGS="$LDFLAGS -lws2_32 -no-undefined"
+
+    AC_MSG_CHECKING([for gai_strerror])
+    AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([[
+                #include <windef.h>
+                #include <ws2tcpip.h>
+            ]],[[
+                gai_strerror (0);
+            ]])
+        ],
+        [have_gai_strerror=yes],
+        [have_gai_strerror=no])
+    AC_MSG_RESULT([$have_gai_strerror])
   ;;
   *)
-    gami_native_win32=no
+    AC_MSG_RESULT([no])
+
+    AC_CHECK_FUNC([gai_strerror],
+	[have_gai_strerror=yes],
+	[have_gai_strerror=no])
   ;;
 esac
-AC_MSG_RESULT([$gami_native_win32])
-AM_CONDITIONAL(OS_WIN32, [test "$gami_native_win32" = "yes"])
+
+
+if test "$have_gai_strerror" = "yes";
+then
+	AC_DEFINE([HAVE_GAI_STRERROR],[1],
+		[Define if a usable gai_strerror exists])
+fi
 
 
 dnl ***************************************************************************
@@ -45,7 +70,8 @@ IT_PROG_INTLTOOL([0.35.0])
 m4_defun([_LT_AC_LANG_CXX_CONFIG], [:]) dnl disable checks for C++
 m4_defun([_LT_AC_LANG_F77_CONFIG], [:]) dnl disable checks for Fortran
 m4_defun([_LT_AC_LANG_GCJ_CONFIG], [:]) dnl disable checks for (GNU) Java
-AM_PROG_LIBTOOL
+AC_LIBTOOL_WIN32_DLL
+AC_PROG_LIBTOOL
 
 PKG_CHECK_MODULES(GAMI, [glib-2.0 gobject-2.0])
 
