@@ -1,21 +1,18 @@
-INCLUDES =                                         \
-	   -DG_LOG_DOMAIN=\"Gami\"                 \
-	   -DGAMI_COMPILATION                      \
+INCLUDES = -DG_LOG_DOMAIN=\"Gami\"  \
+	   -DGAMI_COMPILATION       \
 	   $(GAMI_CFLAGS)
 
-gamiincludedir=$(includedir)/gami-1.0
+gamiincludedir=$(includedir)/libgami-1.0
 gamiinclude_HEADERS = gami.h
 
 gamisubincludedir=$(gamiincludedir)/gami
 gamisubinclude_HEADERS = gami-main.h gami-manager.h gami-response.h
 
-lib_LTLIBRARIES = \
-	libgami-1.0.la
+lib_LTLIBRARIES = libgami-1.0.la
 
-libgami_1_0_la_SOURCES = \
-	gami-main.c      \
-	gami-response.c  \
-	gami-manager.c
+libgami_1_0_la_SOURCES = gami-main.c      \
+			 gami-response.c  \
+			 gami-manager.c
 
 AM_CPPFLAGS = -Wall
 
@@ -33,9 +30,9 @@ GAmi-1.0.gir: $(libgami_1_0_la_SOURCES) libgami-1.0.la $(G_IR_SCANNER)
 		--libtool="$(LIBTOOL)" \
 		--output $@ \
 		--pkg gobject-2.0 \
-		-I$(top_srcdir) \
 		-I$(top_srcdir)/src \
-		$(INCLUDES) \
+		$(GAMI_CFLAGS) \
+		-DGAMI_COMPILATION \
 		$(gamisubinclude_HEADERS:%=$(top_srcdir)/src/%) \
 		$(libgami_1_0_la_SOURCES:%=$(top_srcdir)/src/%)
 
@@ -49,7 +46,7 @@ EXTRA_DIST = $(gir_DATA) $(typelib_DATA)
 DISTCLEANFILES = $(gir_DATA) $(typelib_DATA)
 
 %.typelib: %.gir $(G_IR_COMPILER)
-	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}. \
+	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}.libs \
 			$(G_IR_COMPILER) --includedir=$(srcdir) --includedir=. \
 			$(G_IR_COMPILER_OPTS) $< -o $(builddir)/$(@F)
 
