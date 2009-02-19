@@ -20,7 +20,7 @@ libgami_1_0_la_LDFLAGS = $(GAMI_LIBS)
 
 BUILT_GIRSOURCES = GAmi-1.0.gir
 
-if HAVE_INTROSPECTION
+if ENABLE_INTROSPECTION
 
 GAmi-1.0.gir: $(libgami_1_0_la_SOURCES) libgami-1.0.la $(G_IR_SCANNER)
 	$(G_IR_SCANNER) -v --namespace GAmi --nsversion=1.0 \
@@ -50,4 +50,4 @@ DISTCLEANFILES = $(gir_DATA) $(typelib_DATA)
 			$(G_IR_COMPILER) --includedir=$(srcdir) --includedir=. \
 			$(G_IR_COMPILER_OPTS) $< -o $(builddir)/$(@F)
 
-endif # HAVE_INTROSPECTION
+endif # ENABLE_INTROSPECTION

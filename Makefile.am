@@ -26,11 +26,11 @@ DISTCLEANFILES = \
 
 DISTCHECK_CONFIGURE_FLAGS=--enable-gtk-doc
 
-if USE_SVN2CL
+if ENABLE_SVN2CL
 	@SVN2CL@ --group-by-day -o $(distdir)/ChangeLog
 endif
 
 install-data-hook:
-if USE_SVN2CL
+if ENABLE_SVN2CL
 	@SVN2CL@ --group-by-day -o $(gamidocdir)/ChangeLog
 endif

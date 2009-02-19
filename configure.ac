@@ -1,17 +1,20 @@
-AC_INIT(libgami, 0.3)
+AC_INIT([libgami],[0.3])
 AC_CANONICAL_SYSTEM
 AM_INIT_AUTOMAKE(AC_PACKAGE_NAME, AC_PACKAGE_VERSION)
+
 AC_CONFIG_HEADERS([config.h])
 
 AC_ISC_POSIX
 AC_PROG_CC
 AM_PROG_CC_STDC
 AC_HEADER_STDC
+IT_PROG_INTLTOOL([0.35.0])
 
 
-dnl ***************************************************************************
-dnl Win32 + gai_strerror
-dnl ***************************************************************************
+##################################################
+# Portability
+##################################################
+
 AC_MSG_CHECKING([for Win32])
 case "$host" in
   *-*-mingw*)
@@ -42,7 +45,6 @@ case "$host" in
   ;;
 esac
 
-
 if test "$have_gai_strerror" = "yes";
 then
 	AC_DEFINE([HAVE_GAI_STRERROR],[1],
@@ -50,17 +52,17 @@ then
 fi
 
 
-dnl ***************************************************************************
-dnl Internatinalization
-dnl ***************************************************************************
+##################################################
+# Internationalization
+##################################################
+
 GETTEXT_PACKAGE=libgami
 AC_SUBST(GETTEXT_PACKAGE)
-AC_DEFINE_UNQUOTED(GETTEXT_PACKAGE,"$GETTEXT_PACKAGE", [GETTEXT package name])
-ALL_LINGUAS="`grep -v '^#' "$srcdir/po/LINGUAS" | tr '\n' ' '`"
+AC_DEFINE_UNQUOTED([GETTEXT_PACKAGE],["$GETTEXT_PACKAGE"],[Gettext package])
 AM_GLIB_GNU_GETTEXT
 AM_GLIB_DEFINE_LOCALEDIR(GAMI_LOCALEDIR)
-IT_PROG_INTLTOOL([0.35.0])
  
+
 ##################################################
 # Libtool
 ##################################################
@@ -70,28 +72,47 @@ m4_defun([_LT_AC_LANG_GCJ_CONFIG], [:]) dnl disable checks for (GNU) Java
 AC_LIBTOOL_WIN32_DLL
 AC_PROG_LIBTOOL
 
-PKG_CHECK_MODULES(GAMI, [glib-2.0 gobject-2.0])
+
+##################################################
+# Module dependency
+##################################################
+
+GLIB_REQ=2.16
+PKG_CHECK_MODULES([GAMI], [glib-2.0 >= $GLIB_REQ gobject-2.0])
+
 
 ##################################################
 # GObject Introspection
 ##################################################
-have_introspection=false
-PKG_CHECK_MODULES(INTROSPECTION, gobject-introspection-1.0 >= 0.6.2,
-		  have_introspection=true, have_introspection=false)
-AM_CONDITIONAL(HAVE_INTROSPECTION, $have_introspection)
+
+AC_MSG_CHECKING([whether GObject introspection is requested])
+AC_ARG_ENABLE([introspection],
+	      AC_HELP_STRING([--enable-introspection],
+			     [Enable GObject introspection]),
+			     [],[enable_introspection=no])
+AC_MSG_RESULT([$enable_introspection])
 
 G_IR_SCANNER=
 G_IR_COMPILER=
 G_IR_GENERATE=
 GIRDIR=
-TYPELIBDIR=
-if $have_introspection; then
+GIRTYPELIBDIR=
+
+
+if test "$enable_introspection" = "yes";
+then
+  GOBJECT_INTROSPECTION_REQ=0.6.2
+  PKG_CHECK_MODULES([GOBJECT_INTROSPECTION],
+		    [gobject-introspection-1.0 >= $GOBJECT_INTROSPECTION_REQ])
+
   G_IR_SCANNER=`$PKG_CONFIG --variable=g_ir_scanner gobject-introspection-1.0`
   G_IR_COMPILER=`$PKG_CONFIG --variable=g_ir_compiler gobject-introspection-1.0`
   G_IR_GENERATE=`$PKG_CONFIG --variable=g_ir_generate gobject-introspection-1.0`
   GIRDIR=`$PKG_CONFIG --variable=girdir gobject-introspection-1.0`
   TYPELIBDIR=`$PKG_CONFIG --variable=typelibdir gobject-introspection-1.0`
 fi
+
+
 AC_SUBST(G_IR_SCANNER)
 AC_SUBST(G_IR_COMPILER)
 AC_SUBST(G_IR_GENERATE)
@@ -99,22 +120,35 @@ AC_SUBST(GIRDIR)
 AC_SUBST(TYPELIBDIR)
 
 
+AM_CONDITIONAL([ENABLE_INTROSPECTION],[test "$enable_introspection" = "yes"])
+
+
 ##################################################
 # Check for gtk-doc.
 ##################################################
+
 GTK_DOC_CHECK([1.9])
 
-dnl Check for svn2cl for some ChangeLog magic
+
+##################################################
+# Check for svn2cl
+##################################################
+
 AC_PATH_PROG(SVN2CL,svn2cl,no)
 
-if test x"$SVN2CL" != xno; then
+if test "$SVN2CL" != "no";
+then
 	AC_MSG_CHECKING([if $SVN2CL works as expected])
-	AS_IF([$SVN2CL --stdout >/dev/null 2>&1],[USE_SVN2CL=yes],
-	      [USE_SVN2CL=no])
-	AC_MSG_RESULT([$USE_SVN2CL])
+	AS_IF([$SVN2CL --stdout >/dev/null 2>&1],[enable_svn2cl=yes],
+	      [enable_svn2cl=no])
+	AC_MSG_RESULT([$enable_svn2cl])
 fi
 
-AM_CONDITIONAL(USE_SVN2CL, test x"$USE_SVN2CL" = xyes)
+AM_CONDITIONAL([ENABLE_SVN2CL],[test "$enable_svn2cl" = "yes"])
+
+
+##################################################
+
 
 AC_OUTPUT([
 Makefile
@@ -125,3 +159,12 @@ docs/Makefile
 docs/reference/Makefile
 docs/reference/version.xml
 ])
+
+echo "
+Configure summary:
+      Gtk-Doc Support......:  $enable_gtk_doc
+      GObj. Introspection..:  $enable_introspection
+      ChangeLog Generation.:  $enable_svn2cl
+
+Now type 'make' to build.
+"
