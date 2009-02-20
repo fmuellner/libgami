@@ -136,6 +136,8 @@ gami_init (int *argc, char ***argv)
         WSACleanup ();
         g_error ("No usable version of WinSock DLL found.");
     }
+
+    g_atexit ((GVoidFunc) WSACleanup);   /* This might be a bad idea in a DLL */
 #endif
 
     g_log_set_handler ("Gami", G_LOG_LEVEL_DEBUG, null_log, NULL);
