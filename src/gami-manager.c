@@ -136,7 +136,7 @@ static GamiResponse *ami_wait_response (GamiManager *ami, GError **error);
 static GamiResponse *action_response (GamiManager *ami, GIOStatus status,
                                       const gchar *action_id, GError **error);
 
-/* response functions to feed callbacks to "response" signal */
+/* response functions to feed callbacks */
 static GamiResponse *get_bool_response (GamiManager *ami, GHashTable *resp);
 static GamiResponse *get_ping_response (GamiManager *ami, GHashTable *resp);
 static GamiResponse *get_events_response (GamiManager *ami, GHashTable *resp);
@@ -257,7 +257,6 @@ gami_manager_new_async (const gchar *host, const gchar *port,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-/* FIXME: I have no idea if I got the w32 stuff right */
 gboolean
 gami_manager_connect (GamiManager *ami, GError **error)
 {
@@ -298,7 +297,6 @@ gami_manager_connect (GamiManager *ami, GError **error)
 
 
     if (rp == NULL) {
-        /* FIXME: do something */
         /* Error */
         freeaddrinfo (result);
 
