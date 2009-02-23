@@ -1,0 +1,14 @@
+This is the README file for Libgami. Libgami is a GObject based library to 
+connect to the Asterisk manager interface.
+
+It integrates with the GLib main loop and uses the GObject signal system to 
+notify about asterisk events, therefore integrating nicely with GLib and GTK+.
+
+Although written mainly with the Linux platform in mind, it should compile on 
+any UNIX platform supported by GLib. On Windows, it is known to work with the 
+MinGW compiler.
+
+While it aims to fully support the manager API, there is still some funcionality
+missing. Refer to the missing section of the distributed API documentation.
+
+For installation instructions, see the file 'INSTALL'.
