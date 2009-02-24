@@ -122,6 +122,7 @@ static gboolean gami_manager_new_async_cb (GamiManagerNewAsyncData *data);
 static gboolean parse_connection_string (GamiManager *ami, GError **error);
 static gchar *event_string_from_mask (GamiManager *ami, GamiEventMask mask);
 
+static gchar *get_action_id (const gchar *action_id);
 static gboolean reconnect_socket (GamiManager *ami);
 
 static GIOStatus send_command (GIOChannel *c, const gchar *cmd, GError **e);
@@ -354,6 +355,7 @@ gami_manager_login (GamiManager *ami, const gchar *username,
     GamiManagerPrivate *priv;
     GString  *action;
     gchar    *action_str;
+    gchar    *action_id_new;
     gchar    *event_str;
     GIOStatus iostatus;
 
@@ -380,8 +382,9 @@ gami_manager_login (GamiManager *ami, const gchar *username,
     g_string_append_printf (action, "Events: %s\r\n", event_str);
     g_free (event_str);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -415,6 +418,7 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -430,8 +434,9 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: Logoff\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -473,6 +478,7 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -492,8 +498,10 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
 
     if (channel != NULL)
         g_string_append_printf (action, "Channel: %s\r\n", channel);
-    if (action_id != NULL)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -531,6 +539,7 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -549,8 +558,10 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
 
     if (channel)
         g_string_append_printf (action, "Channel: %s\r\n", channel);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\n\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\n\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Variable: %s\r\nValue: %s\r\n\r\n",
                             variable, value);
@@ -592,6 +603,7 @@ gami_manager_module_check (GamiManager *ami, const gchar *module,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -609,8 +621,9 @@ gami_manager_module_check (GamiManager *ami, const gchar *module,
     action = g_string_new ("Action: ModuleCheck\r\n");
     g_string_append_printf (action, "Module: %s\r\n", module);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -647,6 +660,7 @@ gami_manager_module_load (GamiManager *ami, const gchar *module,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -664,8 +678,10 @@ gami_manager_module_load (GamiManager *ami, const gchar *module,
 
     if (module)
         g_string_append_printf (action, "Module: %s\r\n", module);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     switch (load_type) {
         case GAMI_MODULE_LOAD:
@@ -721,6 +737,7 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -744,8 +761,10 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
         g_string_append_printf (action, "Format: %s\r\n", format);
     if (mix)
         g_string_append (action, "Mix: 1\r\n");
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -782,6 +801,7 @@ gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -798,8 +818,9 @@ gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
 
     action = g_string_new ("Action: ChangeMonitor\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\nFile: %s\r\n\r\n",
                             channel, file);
@@ -836,6 +857,7 @@ gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -852,8 +874,9 @@ gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
 
     action = g_string_new ("Action: StopMonitor\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
 
@@ -889,6 +912,7 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -905,8 +929,9 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
 
     action = g_string_new ("Action: PauseMonitor\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
 
@@ -942,6 +967,7 @@ gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -958,8 +984,9 @@ gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
 
     action = g_string_new ("Action: UnpauseMonitor\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
 
@@ -1001,6 +1028,7 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1017,8 +1045,9 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
 
     action = g_string_new ("Action: MeetmeMute\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Meetme: %s\r\nUserNum: %s\r\n\r\n",
                             meetme, user_num);
@@ -1056,6 +1085,7 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1072,8 +1102,9 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
 
     action = g_string_new ("Action: MeetmeUnmute\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Meetme: %s\r\nUserNum: %s\r\n\r\n",
                             meetme, user_num);
@@ -1111,6 +1142,7 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1128,8 +1160,10 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
 
     if (meetme)
         g_string_append_printf (action, "Conference: %s", meetme);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1173,6 +1207,7 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1195,8 +1230,10 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
         g_string_append_printf (action, "Penalty: %d\r\n", penalty);
     if (paused)
         g_string_append (action, "Paused: 1\r\n");
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1233,6 +1270,7 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1251,8 +1289,9 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
     g_string_append_printf (action, "Queue: %s\r\nInterface: %s\r\n",
                             queue, iface);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1291,6 +1330,7 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1311,8 +1351,10 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
 
     if (queue)
         g_string_append_printf (action, "Queue: %s\r\n", queue);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1351,6 +1393,7 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1371,8 +1414,10 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
 
     if (queue)
         g_string_append_printf (action, "Queue: %s\r\n", queue);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1409,6 +1454,7 @@ gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1426,8 +1472,10 @@ gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
 
     if (queue)
         g_string_append_printf (action, "Queue: %s\r\n", queue);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1464,6 +1512,7 @@ gami_manager_queue_log (GamiManager *ami, const gchar *queue,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1482,8 +1531,9 @@ gami_manager_queue_log (GamiManager *ami, const gchar *queue,
     g_string_append_printf (action, "Queue: %s\r\nEvent: %s\r\n",
                             queue, event);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1612,6 +1662,7 @@ gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1630,8 +1681,9 @@ gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
     g_string_append_printf (action, "ZapChannel: %s\r\nNumber: %s\r\n",
                             zap_channel, number);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1666,6 +1718,7 @@ gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1683,8 +1736,9 @@ gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
     action = g_string_new ("Action: ZapHangup\r\n");
     g_string_append_printf (action, "ZapChannel: %s\r\n", zap_channel);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1719,6 +1773,7 @@ gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1736,8 +1791,9 @@ gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
     action = g_string_new ("Action: ZapDNDOn\r\n");
     g_string_append_printf (action, "ZapChannel: %s\r\n", zap_channel);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1773,6 +1829,7 @@ gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1790,8 +1847,9 @@ gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
     action = g_string_new ("Action: ZapDNDOff\r\n");
     g_string_append_printf (action, "ZapChannel: %s\r\n", zap_channel);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1826,6 +1884,7 @@ gami_manager_zap_show_channels (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1841,8 +1900,9 @@ gami_manager_zap_show_channels (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: ZapShowChannels\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1878,6 +1938,7 @@ gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1895,8 +1956,9 @@ gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
     action = g_string_new ("Action: ZapTransfer\r\n");
     g_string_append_printf (action, "ZapChannel: %s\r\n", zap_channel);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1930,6 +1992,7 @@ gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -1945,8 +2008,9 @@ gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: ZapRestart\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1988,6 +2052,7 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2006,8 +2071,9 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
     g_string_append_printf (action, "DAHDIChannel: %s\r\nNumber: %s\r\n",
                             dahdi_channel, number);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2043,6 +2109,7 @@ gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2060,8 +2127,9 @@ gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
     action = g_string_new ("Action: DAHDIHangup\r\n");
     g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2097,6 +2165,7 @@ gami_manager_dahdi_dnd_on (GamiManager *ami, const gchar *dahdi_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2114,8 +2183,9 @@ gami_manager_dahdi_dnd_on (GamiManager *ami, const gchar *dahdi_channel,
     action = g_string_new ("Action: DAHDIDNDOn\r\n");
     g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2151,6 +2221,7 @@ gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2168,8 +2239,9 @@ gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
     action = g_string_new ("Action: DAHDIDNDOff\r\n");
     g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2206,6 +2278,7 @@ gami_manager_dahdi_show_channels (GamiManager *ami, const gchar *dahdi_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2223,8 +2296,10 @@ gami_manager_dahdi_show_channels (GamiManager *ami, const gchar *dahdi_channel,
 
     if (dahdi_channel)
         g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2260,6 +2335,7 @@ gami_manager_dahdi_transfer (GamiManager *ami, const gchar *dahdi_channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2277,8 +2353,9 @@ gami_manager_dahdi_transfer (GamiManager *ami, const gchar *dahdi_channel,
     action = g_string_new ("Action: DAHDITransfer\r\n");
     g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2312,6 +2389,7 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2327,8 +2405,9 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: DAHDIRestart\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2368,6 +2447,7 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2383,8 +2463,9 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: Agents\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2429,6 +2510,7 @@ gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2452,8 +2534,10 @@ gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
         g_string_append (action, "AckCall: 1\r\n");
     if (wrapup_time)
         g_string_append_printf (action, "WrapupTime: %d\r\n", wrapup_time);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2489,6 +2573,7 @@ gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2506,8 +2591,9 @@ gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
     action = g_string_new ("Action: AgentLogoff\r\n");
     g_string_append_printf (action, "Agent: %s\r\n", agent);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2548,6 +2634,7 @@ gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2565,8 +2652,9 @@ gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
     action = g_string_new ("Action: DBGet\r\n");
     g_string_append_printf (action, "Family: %s\r\nKey: %s\r\n", family, key);
 
-    if (action_id != NULL)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2604,6 +2692,7 @@ gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2623,8 +2712,10 @@ gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
 
     if (val)
         g_string_append_printf (action, "Val: %s\r\n", val);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2660,6 +2751,7 @@ gami_manager_db_del (GamiManager *ami, const gchar *family, const gchar *key,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2677,8 +2769,9 @@ gami_manager_db_del (GamiManager *ami, const gchar *family, const gchar *key,
     action = g_string_new ("Action: DBDel\r\n");
     g_string_append_printf (action, "Family: %s\r\nKey: %s\r\n", family, key);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2714,6 +2807,7 @@ gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2731,8 +2825,9 @@ gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
     action = g_string_new ("Action: DBDelTree\r\n");
     g_string_append_printf (action, "Family: %s\r\n", family);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2776,6 +2871,7 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2796,8 +2892,10 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
 
     if (timeout)
         g_string_append_printf (action, "Timeout: %d\r\n", timeout);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2832,6 +2930,7 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2847,8 +2946,9 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: ParkedCalls\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2888,6 +2988,7 @@ gami_manager_voicemail_users_list (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2903,8 +3004,9 @@ gami_manager_voicemail_users_list (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: VoicemailUsersList\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2940,6 +3042,7 @@ gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -2956,8 +3059,9 @@ gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
 
     action = g_string_new ("Action: MailboxCount\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Mailbox: %s\r\n\r\n", mailbox);
 
@@ -2993,6 +3097,7 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3009,8 +3114,9 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
 
     action = g_string_new ("Action: MailboxStatus\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Mailbox: %s\r\n\r\n", mailbox);
 
@@ -3050,6 +3156,7 @@ gami_manager_core_status (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3065,8 +3172,9 @@ gami_manager_core_status (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: CoreStatus\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3101,6 +3209,7 @@ gami_manager_core_show_channels (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3116,8 +3225,9 @@ gami_manager_core_show_channels (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: CoreShowChannels\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3151,6 +3261,7 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3166,8 +3277,9 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: CoreSettings\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3206,6 +3318,7 @@ gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3221,8 +3334,9 @@ gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: IAXpeerlist\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3257,6 +3371,7 @@ gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3272,8 +3387,9 @@ gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: SIPpeers\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3309,6 +3425,7 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3325,8 +3442,9 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
 
     action = g_string_new ("Action: SIPShowPeer\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Peer: %s\r\n\r\n", peer);
 
@@ -3361,6 +3479,7 @@ gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3376,8 +3495,9 @@ gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: SIPshowregistry\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3414,6 +3534,7 @@ gami_manager_status (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3431,8 +3552,10 @@ gami_manager_status (GamiManager *ami, const gchar *channel,
 
     if (channel)
         g_string_append_printf (action, "Channel: %s\r\n", channel);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3471,6 +3594,7 @@ gami_manager_extension_state (GamiManager *ami, const gchar *exten,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3487,8 +3611,9 @@ gami_manager_extension_state (GamiManager *ami, const gchar *exten,
 
     action = g_string_new ("Action: ExtensionState\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Exten: %s\r\nContext: %s\r\n\r\n",
                             exten, context);
@@ -3524,6 +3649,7 @@ gami_manager_ping (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3541,8 +3667,9 @@ gami_manager_ping (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: Ping\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3578,6 +3705,7 @@ gami_manager_absolute_timeout (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3594,8 +3722,9 @@ gami_manager_absolute_timeout (GamiManager *ami, const gchar *channel,
 
     action = g_string_new ("Action: AbsoluteTimeout\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\nTimeout: %d\r\n\r\n",
                             channel, timeout);
@@ -3631,6 +3760,7 @@ gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3648,8 +3778,9 @@ gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
     action = g_string_new ("Action: Challenge\r\n");
     g_string_append_printf (action, "AuthType: %s\r\n", auth_type);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3688,6 +3819,7 @@ gami_manager_set_cdr_user_field (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3706,8 +3838,10 @@ gami_manager_set_cdr_user_field (GamiManager *ami, const gchar *channel,
 
     if (append)
         g_string_append (action, "Append: 1\r\n");
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\nUserField: %s\r\n\r\n",
                             channel, user_field);
@@ -3744,6 +3878,7 @@ gami_manager_reload (GamiManager *ami, const gchar *module,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3761,8 +3896,10 @@ gami_manager_reload (GamiManager *ami, const gchar *module,
 
     if (module)
         g_string_append_printf (action, "Module: %s\r\n", module);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3798,6 +3935,7 @@ gami_manager_hangup (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3814,8 +3952,9 @@ gami_manager_hangup (GamiManager *ami, const gchar *channel,
 
     action = g_string_new ("Action: Hangup\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
 
@@ -3857,6 +3996,7 @@ gami_manager_redirect (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3877,8 +4017,10 @@ gami_manager_redirect (GamiManager *ami, const gchar *channel,
 
     if (extra_channel)
         g_string_append_printf (action, "ExtraChannel: %s\r\n", extra_channel);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Exten: %s\r\nContext: %s\r\n"
                             "Priority: %s\r\n\r\n", exten, context, priority);
@@ -3917,6 +4059,7 @@ gami_manager_bridge (GamiManager *ami, const gchar *channel1,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3937,8 +4080,9 @@ gami_manager_bridge (GamiManager *ami, const gchar *channel1,
 
     g_string_append_printf (action, "Tone: %s\r\n", tone ? "Yes" : "No");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3974,8 +4118,9 @@ gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
                   GError **error)
 {
     GamiManagerPrivate *priv;
-    GString *action;
+    GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -3996,8 +4141,10 @@ gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
 
     if (command_id)
         g_string_append_printf (action, "CommandID: %s\r\n", command_id);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4034,6 +4181,7 @@ gami_manager_send_text (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4052,8 +4200,9 @@ gami_manager_send_text (GamiManager *ami, const gchar *channel,
     g_string_append_printf (action, "Channel: %s\r\nMessage: %s\r\n",
                             channel, message);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4092,6 +4241,7 @@ gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4110,8 +4260,9 @@ gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
     g_string_append_printf (action, "Jabber: %s\r\nScreenName: %s\r\n",
                             jabber, screen_name);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Message: %s\r\n\r\n", message);
 
@@ -4148,6 +4299,7 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4167,8 +4319,10 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
 
     if (digit)
         g_string_append_printf (action, "Digit: %c\r\n", digit);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4204,6 +4358,7 @@ gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4219,8 +4374,9 @@ gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
 
     action = g_string_new ("Action: ListCommands\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4257,6 +4413,7 @@ gami_manager_list_categories (GamiManager *ami, const gchar *filename,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4273,8 +4430,9 @@ gami_manager_list_categories (GamiManager *ami, const gchar *filename,
 
     action = g_string_new ("Action: ListCategories\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Filename: %s\r\n\r\n", filename);
 
@@ -4311,6 +4469,7 @@ gami_manager_get_config (GamiManager *ami, const gchar *filename,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4327,8 +4486,9 @@ gami_manager_get_config (GamiManager *ami, const gchar *filename,
 
     action = g_string_new ("Action: GetConfig\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Filename: %s\r\n\r\n", filename);
 
@@ -4365,6 +4525,7 @@ gami_manager_get_config_json (GamiManager *ami, const gchar *filename,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4381,8 +4542,9 @@ gami_manager_get_config_json (GamiManager *ami, const gchar *filename,
 
     action = g_string_new ("Action: GetConfigJSON\r\n");
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append_printf (action, "Filename: %s\r\n\r\n", filename);
 
@@ -4418,6 +4580,7 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4435,8 +4598,9 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
     action = g_string_new ("Action: CreateConfig\r\n");
     g_string_append_printf (action, "Filename: %s\r\n", filename);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4492,6 +4656,7 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4538,8 +4703,10 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
     }
     if (async)
         g_string_append (action, "Async: 1\r\n");
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4576,6 +4743,7 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     gchar     *event_str;
     GIOStatus  iostatus;
 
@@ -4598,8 +4766,9 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
     g_string_append_printf (action, "EventMask: %s\r\n", event_str);
     g_free (event_str);
 
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4636,6 +4805,7 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4663,8 +4833,10 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
         g_string_append_printf (action, "%s", header_str);
         g_free (header_str);
     }
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4700,6 +4872,7 @@ gami_manager_wait_event (GamiManager *ami, guint timeout,
     GamiManagerPrivate *priv;
     GString   *action;
     gchar     *action_str;
+    gchar     *action_id_new;
     GIOStatus  iostatus;
 
     g_assert (error == NULL || *error == NULL);
@@ -4717,8 +4890,10 @@ gami_manager_wait_event (GamiManager *ami, guint timeout,
 
     if (timeout)
         g_string_append_printf (action, "Timeout: %d\r\n", timeout);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
+
+    action_id_new = get_action_id (action_id);
+    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4839,6 +5014,19 @@ event_string_from_mask (GamiManager *mgr, GamiEventMask mask)
     }
 
     return g_string_free (events, FALSE);
+}
+
+static gchar *
+get_action_id (const gchar *action_id)
+{
+    gchar *template;
+
+    if (action_id)
+        return g_strdup (action_id);
+
+    template = g_strdup_printf ("XXXXXX");
+
+    return mktemp (template);
 }
 
 static GIOStatus
