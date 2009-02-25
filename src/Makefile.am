@@ -1,6 +1,7 @@
 INCLUDES = -DG_LOG_DOMAIN=\"Gami\"  \
-	   -DGAMI_COMPILATION       \
-	   $(GAMI_CFLAGS)
+		   -DGAMI_COMPILATION       \
+		   -DG_DISABLE_DEPRECATED   \
+		   $(GAMI_CFLAGS)
 
 gamiincludedir=$(includedir)/libgami-1.0
 gamiinclude_HEADERS = gami.h
