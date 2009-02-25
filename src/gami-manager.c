@@ -5003,10 +5003,12 @@ process_packet (GamiManager *mgr, GHashTable *packet)
     priv = GAMI_MANAGER_PRIVATE (mgr);
 
     action_id = g_hash_table_lookup (packet, "ActionID");
-    if (action_id) {
+    if (action_id || g_hash_table_lookup (packet, "Response")) {
         GamiActionHook *hook;
 
-        if ((hook = g_hash_table_lookup (priv->action_hooks, action_id))) {
+		hook = action_id ? g_hash_table_lookup (priv->action_hooks, action_id)
+		                 : g_hash_table_lookup (priv->action_hooks, "current");
+        if (hook) {
             GamiResponse *resp;
 
             resp = hook->handler_func (packet, hook->handler_data);
@@ -5029,17 +5031,20 @@ add_action_hook (GamiManager *mgr, gchar *action_id,
                  GamiResponseFunc user_func, gpointer user_data)
 {
     GamiManagerPrivate *priv;
-    GamiActionHook     *hook;
+    GamiActionHook     *hook, *current_hook;
 
     priv = GAMI_MANAGER_PRIVATE (mgr);
     hook = g_new0 (GamiActionHook, 1);
+	current_hook = g_new0 (GamiActionHook, 1);
 
-    hook->handler_func = handler_func;
-    hook->handler_data = handler_data;
-    hook->user_func = user_func;
-    hook->user_data = user_data;
+    hook->handler_func = current_hook->handler_func = handler_func;
+    hook->handler_data = current_hook->handler_data = handler_data;
+    hook->user_func = current_hook->user_func = user_func;
+    hook->user_data = current_hook->user_data = user_data;
 
     g_hash_table_insert (priv->action_hooks, action_id, hook);
+	g_hash_table_insert (priv->action_hooks, g_strdup ("current"),
+						 current_hook);
 }
 
 static GamiResponse *
