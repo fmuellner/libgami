@@ -77,6 +77,18 @@
  * implementations as gtk_main().
  */
 
+typedef GamiResponse *(*GamiResponseHandlerFunc) (GHashTable *, gpointer);
+
+typedef struct _GamiActionHook GamiActionHook;
+struct _GamiActionHook
+{
+    GamiResponseHandlerFunc handler_func;
+    gpointer                handler_data;
+
+    GamiResponseFunc        user_func;
+    gpointer                user_data;
+};
+
 typedef struct _GamiManagerPrivate GamiManagerPrivate;
 struct _GamiManagerPrivate
 {
@@ -85,9 +97,8 @@ struct _GamiManagerPrivate
     gchar *host;
     gchar *port;
 
-    GamiResponseFunc response_func;
-    GamiResponse *(*response_value_func) (GamiManager *ami, GHashTable *resp);
-    gpointer response_data;
+    GHashTable *action_hooks;
+    GamiResponse *sync_response;
 };
 
 #define GAMI_MANAGER_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), \
@@ -126,52 +137,33 @@ static gchar *get_action_id (const gchar *action_id);
 static gboolean reconnect_socket (GamiManager *ami);
 
 static GIOStatus send_command (GIOChannel *c, const gchar *cmd, GError **e);
-static GIOStatus receive_packet (GIOChannel *c, GHashTable **p, GError **e);
 
 static gboolean dispatch_ami (GIOChannel *chan,
                               GIOCondition cond,
                               GamiManager *ami);
+static void process_packet (GamiManager *manager, GHashTable *packet);
+static void add_action_hook (GamiManager *manager, gchar *action_id,
+                             GamiResponseHandlerFunc handler_func,
+                             gpointer handler_data,
+                             GamiResponseFunc user_func,
+                             gpointer user_data);
 
-/* return value in synchronious operation */
-static GamiResponse *ami_wait_response (GamiManager *ami, GError **error);
+/* return action response, blocks for synchronous responses */
 static GamiResponse *action_response (GamiManager *ami, GIOStatus status,
                                       const gchar *action_id, GError **error);
 
 /* response functions to feed callbacks */
-static GamiResponse *get_bool_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_ping_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_events_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_logoff_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_hash_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_challenge_response (GamiManager *ami,
-                                             GHashTable *resp);
-static GamiResponse *get_getvar_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_dbget_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_zaplist_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_dahdilist_response (GamiManager *ami,
-                                             GHashTable *resp);
-static GamiResponse *get_agentlist_response (GamiManager *ami,
-                                             GHashTable *resp);
-static GamiResponse *get_parklist_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_meetmelist_response (GamiManager *ami,
-                                              GHashTable *resp);
-static GamiResponse *get_siplist_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_iaxlist_response (GamiManager *ami, GHashTable *resp);
-static GamiResponse *get_sipregistrylist_response (GamiManager *ami,
-                                                   GHashTable *resp);
-static GamiResponse *get_statuslist_response (GamiManager *ami,
-                                              GHashTable *resp);
-static GamiResponse *get_showchannelslist_response (GamiManager *ami,
-                                                    GHashTable *resp);
-static GamiResponse *get_queuelist_response (GamiManager *ami,
-                                             GHashTable *resp);
-static GamiResponse *get_voicemaillist_response (GamiManager *ami,
-                                                 GHashTable *resp);
+static GamiResponse *process_bool_response (GHashTable *packet,
+                                            gpointer expected);
+static GamiResponse *process_string_response (GHashTable *packet,
+                                              gpointer return_key);
+static GamiResponse *process_hash_response (GHashTable *packet,
+                                            gpointer unused);
+static GamiResponse *process_list_response (GHashTable *packet,
+                                            gpointer stop_event);
 
+/* various helper funcs */
 static gboolean check_response (GHashTable *p, const gchar *expected_value);
-static gboolean get_response_list (GIOChannel *chan, GSList **list,
-                                   gchar *list_event, gchar *stop_event,
-                                   gchar *check_num, GError **error);
 static void join_originate_vars (gchar *key, gchar *value, GString *s);
 static void join_originate_vars_legacy (gchar *key, gchar *value, GString *s);
 static void join_user_event_headers (gchar *key, gchar *value, GString *s);
@@ -313,6 +305,7 @@ gami_manager_connect (GamiManager *ami, GError **error)
         g_signal_emit (ami, signals [CONNECTED], 0);
     }
 
+    g_io_channel_set_flags (priv->socket, G_IO_FLAG_NONBLOCK, error);
     g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI,
                     (GIOFunc) dispatch_ami, ami);
 
@@ -367,10 +360,6 @@ gami_manager_login (GamiManager *ami, const gchar *username,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Login\r\n");
     if (auth_type)
         g_string_append_printf (action, "AuthType: %s\r\n", auth_type);
@@ -383,8 +372,10 @@ gami_manager_login (GamiManager *ami, const gchar *username,
     g_free (event_str);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -393,7 +384,7 @@ gami_manager_login (GamiManager *ami, const gchar *username,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -428,15 +419,15 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_logoff_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Logoff\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response,
+                     (ami->api_major && ami->api_minor) ? "Success"
+                                                        : "Goodbye",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -445,7 +436,7 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -489,10 +480,6 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_getvar_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: GetVar\r\n");
     g_string_append_printf (action, "Variable: %s\r\n", variable);
 
@@ -500,8 +487,10 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
         g_string_append_printf (action, "Channel: %s\r\n", channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_string_response, "Value",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -510,7 +499,7 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -550,18 +539,16 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: SetVar\r\n");
 
     if (channel)
         g_string_append_printf (action, "Channel: %s\r\n", channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\n\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Variable: %s\r\nValue: %s\r\n\r\n",
                             variable, value);
@@ -571,7 +558,7 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -614,16 +601,14 @@ gami_manager_module_check (GamiManager *ami, const gchar *module,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ModuleCheck\r\n");
     g_string_append_printf (action, "Module: %s\r\n", module);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -632,7 +617,7 @@ gami_manager_module_check (GamiManager *ami, const gchar *module,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -670,18 +655,16 @@ gami_manager_module_load (GamiManager *ami, const gchar *module,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ModuleCheck\r\n");
 
     if (module)
         g_string_append_printf (action, "Module: %s\r\n", module);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     switch (load_type) {
         case GAMI_MODULE_LOAD:
@@ -702,7 +685,7 @@ gami_manager_module_load (GamiManager *ami, const gchar *module,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -748,10 +731,6 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Monitor\r\n");
     g_string_append_printf (action, "Channel: %s\r\n", channel);
 
@@ -763,8 +742,10 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
         g_string_append (action, "Mix: 1\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -773,7 +754,7 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -812,15 +793,13 @@ gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ChangeMonitor\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\nFile: %s\r\n\r\n",
                             channel, file);
@@ -830,7 +809,7 @@ gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -868,15 +847,13 @@ gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: StopMonitor\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
 
@@ -885,7 +862,7 @@ gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -923,15 +900,13 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: PauseMonitor\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
 
@@ -940,7 +915,7 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -978,15 +953,13 @@ gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: UnpauseMonitor\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
 
@@ -995,7 +968,7 @@ gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -1039,15 +1012,13 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: MeetmeMute\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Meetme: %s\r\nUserNum: %s\r\n\r\n",
                             meetme, user_num);
@@ -1057,7 +1028,7 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1096,15 +1067,13 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: MeetmeUnmute\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Meetme: %s\r\nUserNum: %s\r\n\r\n",
                             meetme, user_num);
@@ -1114,7 +1083,7 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1152,18 +1121,16 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_meetmelist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: MeetmeList\r\n");
 
     if (meetme)
         g_string_append_printf (action, "Conference: %s", meetme);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_list_response, "MeetMeListComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1172,7 +1139,7 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -1218,10 +1185,6 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: QueueAdd\r\n");
     g_string_append_printf (action, "Queue: %s\r\nInterface: %s\r\n",
                             queue, iface);
@@ -1232,8 +1195,10 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
         g_string_append (action, "Paused: 1\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1242,7 +1207,7 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1281,17 +1246,15 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: QueueRemove\r\n");
     g_string_append_printf (action, "Queue: %s\r\nInterface: %s\r\n",
                             queue, iface);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1300,7 +1263,7 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1341,10 +1304,6 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: QueuePause\r\n");
     g_string_append_printf (action, "Interface: %s\r\nPaused: %d\r\n",
                             iface, paused ? 1: 0);
@@ -1353,8 +1312,10 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
         g_string_append_printf (action, "Queue: %s\r\n", queue);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1363,7 +1324,7 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1404,10 +1365,6 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: QueuePenalty\r\n");
     g_string_append_printf (action, "Interface: %s\r\nPenalty: %d\r\n",
                             iface, penalty);
@@ -1416,8 +1373,10 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
         g_string_append_printf (action, "Queue: %s\r\n", queue);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1426,7 +1385,7 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1464,18 +1423,16 @@ gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_queuelist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: QueueSummary\r\n");
 
     if (queue)
         g_string_append_printf (action, "Queue: %s\r\n", queue);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_list_response, "QueueSummaryComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1484,7 +1441,7 @@ gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1523,17 +1480,15 @@ gami_manager_queue_log (GamiManager *ami, const gchar *queue,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: QueueLog\r\n");
     g_string_append_printf (action, "Queue: %s\r\nEvent: %s\r\n",
                             queue, event);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1542,7 +1497,7 @@ gami_manager_queue_log (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 #if 0
@@ -1673,17 +1628,15 @@ gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ZapDialOffhook\r\n");
     g_string_append_printf (action, "ZapChannel: %s\r\nNumber: %s\r\n",
                             zap_channel, number);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1692,7 +1645,7 @@ gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1729,16 +1682,14 @@ gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ZapHangup\r\n");
     g_string_append_printf (action, "ZapChannel: %s\r\n", zap_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1747,7 +1698,7 @@ gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1784,16 +1735,14 @@ gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ZapDNDOn\r\n");
     g_string_append_printf (action, "ZapChannel: %s\r\n", zap_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1802,7 +1751,7 @@ gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1840,16 +1789,14 @@ gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ZapDNDOff\r\n");
     g_string_append_printf (action, "ZapChannel: %s\r\n", zap_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1858,7 +1805,7 @@ gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1894,15 +1841,13 @@ gami_manager_zap_show_channels (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_zaplist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ZapShowChannels\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "ZapShowChannelsComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1911,7 +1856,7 @@ gami_manager_zap_show_channels (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -1949,16 +1894,14 @@ gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ZapTransfer\r\n");
     g_string_append_printf (action, "ZapChannel: %s\r\n", zap_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -1967,7 +1910,7 @@ gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2002,15 +1945,13 @@ gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ZapRestart\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2019,7 +1960,7 @@ gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -2063,17 +2004,15 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DAHDIDialOffhook\r\n");
     g_string_append_printf (action, "DAHDIChannel: %s\r\nNumber: %s\r\n",
                             dahdi_channel, number);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2082,7 +2021,7 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2120,16 +2059,14 @@ gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DAHDIHangup\r\n");
     g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2138,7 +2075,7 @@ gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2176,16 +2113,14 @@ gami_manager_dahdi_dnd_on (GamiManager *ami, const gchar *dahdi_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DAHDIDNDOn\r\n");
     g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2194,7 +2129,7 @@ gami_manager_dahdi_dnd_on (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2232,16 +2167,14 @@ gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DAHDIDNDOff\r\n");
     g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2250,7 +2183,7 @@ gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2288,18 +2221,16 @@ gami_manager_dahdi_show_channels (GamiManager *ami, const gchar *dahdi_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_dahdilist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DAHDIShowChannels\r\n");
 
     if (dahdi_channel)
         g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "DAHDIShowChannelsComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2308,7 +2239,7 @@ gami_manager_dahdi_show_channels (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2346,16 +2277,14 @@ gami_manager_dahdi_transfer (GamiManager *ami, const gchar *dahdi_channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DAHDITransfer\r\n");
     g_string_append_printf (action, "DAHDIChannel: %s\r\n", dahdi_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2364,7 +2293,7 @@ gami_manager_dahdi_transfer (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2399,15 +2328,13 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DAHDIRestart\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2416,7 +2343,7 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -2457,15 +2384,13 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_agentlist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Agents\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "AgentsComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2474,7 +2399,7 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2521,10 +2446,6 @@ gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: AgentCallbackLogin\r\n");
     g_string_append_printf (action, "Agent: %s\r\nExten: %s\r\n", agent, exten);
 
@@ -2536,8 +2457,10 @@ gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
         g_string_append_printf (action, "WrapupTime: %d\r\n", wrapup_time);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2546,7 +2469,7 @@ gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2584,16 +2507,14 @@ gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: AgentLogoff\r\n");
     g_string_append_printf (action, "Agent: %s\r\n", agent);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2602,7 +2523,7 @@ gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /*
@@ -2645,16 +2566,14 @@ gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_dbget_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DBGet\r\n");
     g_string_append_printf (action, "Family: %s\r\nKey: %s\r\n", family, key);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_string_response, "Val",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2663,7 +2582,7 @@ gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2703,10 +2622,6 @@ gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DBPut\r\n");
     g_string_append_printf (action, "Family: %s\r\nKey: %s\r\n", family, key);
 
@@ -2714,8 +2629,10 @@ gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
         g_string_append_printf (action, "Val: %s\r\n", val);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2724,7 +2641,7 @@ gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2762,16 +2679,14 @@ gami_manager_db_del (GamiManager *ami, const gchar *family, const gchar *key,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DBDel\r\n");
     g_string_append_printf (action, "Family: %s\r\nKey: %s\r\n", family, key);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2780,7 +2695,7 @@ gami_manager_db_del (GamiManager *ami, const gchar *family, const gchar *key,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2818,16 +2733,14 @@ gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: DBDelTree\r\n");
     g_string_append_printf (action, "Family: %s\r\n", family);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2836,7 +2749,7 @@ gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -2882,10 +2795,6 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Park\r\n");
     g_string_append_printf (action, "Channel: %s\r\nChannel2: %s\r\n",
                             channel, channel2);
@@ -2894,8 +2803,10 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
         g_string_append_printf (action, "Timeout: %d\r\n", timeout);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2904,7 +2815,7 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -2940,15 +2851,13 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_parklist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ParkedCalls\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_list_response, "ParkedCallsComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -2957,7 +2866,7 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -2998,15 +2907,13 @@ gami_manager_voicemail_users_list (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_voicemaillist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: VoicemailUsersList\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_list_response, "VoicemailUserEntryComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3015,7 +2922,7 @@ gami_manager_voicemail_users_list (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3053,15 +2960,13 @@ gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: MailboxCount\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Mailbox: %s\r\n\r\n", mailbox);
 
@@ -3070,7 +2975,7 @@ gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3108,15 +3013,13 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: MailboxStatus\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Mailbox: %s\r\n\r\n", mailbox);
 
@@ -3125,7 +3028,7 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -3166,15 +3069,13 @@ gami_manager_core_status (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: CoreStatus\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3183,7 +3084,7 @@ gami_manager_core_status (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3219,15 +3120,13 @@ gami_manager_core_show_channels (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_showchannelslist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: CoreShowChannels\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_list_response, "CoreShowChannelsComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3236,7 +3135,7 @@ gami_manager_core_show_channels (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3271,15 +3170,13 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: CoreSettings\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3288,7 +3185,7 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /*
@@ -3328,15 +3225,13 @@ gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_iaxlist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: IAXpeerlist\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_list_response, "PeerlistComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3345,7 +3240,7 @@ gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3381,15 +3276,13 @@ gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_siplist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: SIPpeers\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_list_response, "PeerlistComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3398,7 +3291,7 @@ gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3436,15 +3329,13 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: SIPShowPeer\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Peer: %s\r\n\r\n", peer);
 
@@ -3453,7 +3344,7 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3489,15 +3380,13 @@ gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_sipregistrylist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: SIPshowregistry\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_list_response, "RegistrationsComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3506,7 +3395,7 @@ gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3544,18 +3433,16 @@ gami_manager_status (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_statuslist_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Status\r\n");
 
     if (channel)
         g_string_append_printf (action, "Channel: %s\r\n", channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_list_response, "StatusComplete",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3564,7 +3451,7 @@ gami_manager_status (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3605,15 +3492,13 @@ gami_manager_extension_state (GamiManager *ami, const gchar *exten,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ExtensionState\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Exten: %s\r\nContext: %s\r\n\r\n",
                             exten, context);
@@ -3623,7 +3508,7 @@ gami_manager_extension_state (GamiManager *ami, const gchar *exten,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3659,17 +3544,15 @@ gami_manager_ping (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = (ami->api_major
-                                 && ami->api_minor) ? get_bool_response
-        : get_ping_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Ping\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response,
+                     (ami->api_major && ami->api_minor) ? "Success"
+                                                        : "Pong",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3677,7 +3560,7 @@ gami_manager_ping (GamiManager *ami, const gchar *action_id,
 
     iostatus = send_command (priv->socket, action_str, error);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3716,15 +3599,13 @@ gami_manager_absolute_timeout (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: AbsoluteTimeout\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\nTimeout: %d\r\n\r\n",
                             channel, timeout);
@@ -3734,7 +3615,7 @@ gami_manager_absolute_timeout (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3771,16 +3652,14 @@ gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_challenge_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Challenge\r\n");
     g_string_append_printf (action, "AuthType: %s\r\n", auth_type);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_string_response, "Challenge",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3789,7 +3668,7 @@ gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3830,18 +3709,16 @@ gami_manager_set_cdr_user_field (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: SetCDRUserField\r\n");
 
     if (append)
         g_string_append (action, "Append: 1\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\nUserField: %s\r\n\r\n",
                             channel, user_field);
@@ -3851,7 +3728,7 @@ gami_manager_set_cdr_user_field (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3888,18 +3765,16 @@ gami_manager_reload (GamiManager *ami, const gchar *module,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Reload\r\n");
 
     if (module)
         g_string_append_printf (action, "Module: %s\r\n", module);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -3908,7 +3783,7 @@ gami_manager_reload (GamiManager *ami, const gchar *module,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -3946,15 +3821,13 @@ gami_manager_hangup (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Hangup\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
 
@@ -3963,7 +3836,7 @@ gami_manager_hangup (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4008,10 +3881,6 @@ gami_manager_redirect (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Redirect\r\n");
     g_string_append_printf (action, "Channel: %s\r\n", channel);
 
@@ -4019,8 +3888,10 @@ gami_manager_redirect (GamiManager *ami, const gchar *channel,
         g_string_append_printf (action, "ExtraChannel: %s\r\n", extra_channel);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Exten: %s\r\nContext: %s\r\n"
                             "Priority: %s\r\n\r\n", exten, context, priority);
@@ -4030,7 +3901,7 @@ gami_manager_redirect (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4070,10 +3941,6 @@ gami_manager_bridge (GamiManager *ami, const gchar *channel1,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Bridge\r\n");
     g_string_append_printf (action, "Channel1: %s\r\nChannel2: %s\r\n",
                             channel1, channel2);
@@ -4081,8 +3948,10 @@ gami_manager_bridge (GamiManager *ami, const gchar *channel1,
     g_string_append_printf (action, "Tone: %s\r\n", tone ? "Yes" : "No");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4091,7 +3960,7 @@ gami_manager_bridge (GamiManager *ami, const gchar *channel1,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4131,10 +4000,6 @@ gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: AGI\r\n");
     g_string_append_printf (action, "Channel: %s\r\nCommand: %s\r\n",
                             channel, command);
@@ -4143,8 +4008,10 @@ gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
         g_string_append_printf (action, "CommandID: %s\r\n", command_id);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4153,7 +4020,7 @@ gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4192,17 +4059,15 @@ gami_manager_send_text (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: SendText\r\n");
     g_string_append_printf (action, "Channel: %s\r\nMessage: %s\r\n",
                             channel, message);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4211,7 +4076,7 @@ gami_manager_send_text (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4252,17 +4117,15 @@ gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: JabberSend\r\n");
     g_string_append_printf (action, "Jabber: %s\r\nScreenName: %s\r\n",
                             jabber, screen_name);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Message: %s\r\n\r\n", message);
 
@@ -4271,7 +4134,7 @@ gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4310,10 +4173,6 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: PlayDTMF\r\n");
     g_string_append_printf (action, "Channel: %s\r\n", channel);
 
@@ -4321,8 +4180,10 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
         g_string_append_printf (action, "Digit: %c\r\n", digit);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4331,7 +4192,7 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4368,15 +4229,13 @@ gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ListCommands\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4385,7 +4244,7 @@ gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4424,15 +4283,13 @@ gami_manager_list_categories (GamiManager *ami, const gchar *filename,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: ListCategories\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Filename: %s\r\n\r\n", filename);
 
@@ -4441,7 +4298,7 @@ gami_manager_list_categories (GamiManager *ami, const gchar *filename,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4480,15 +4337,13 @@ gami_manager_get_config (GamiManager *ami, const gchar *filename,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: GetConfig\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Filename: %s\r\n\r\n", filename);
 
@@ -4497,7 +4352,7 @@ gami_manager_get_config (GamiManager *ami, const gchar *filename,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4536,15 +4391,13 @@ gami_manager_get_config_json (GamiManager *ami, const gchar *filename,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_hash_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: GetConfigJSON\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_hash_response, NULL,
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append_printf (action, "Filename: %s\r\n\r\n", filename);
 
@@ -4553,7 +4406,7 @@ gami_manager_get_config_json (GamiManager *ami, const gchar *filename,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4591,16 +4444,14 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: CreateConfig\r\n");
     g_string_append_printf (action, "Filename: %s\r\n", filename);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4609,7 +4460,7 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4668,10 +4519,6 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Originate\r\n");
     g_string_append_printf (action, "Channel: %s\r\n", channel);
 
@@ -4705,8 +4552,10 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
         g_string_append (action, "Async: 1\r\n");
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4715,7 +4564,7 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4754,12 +4603,6 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = (ami->api_major
-                                 && ami->api_minor) ? get_bool_response
-        : get_events_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: Events\r\n");
 
     event_str = event_string_from_mask (ami, event_mask);
@@ -4767,8 +4610,12 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
     g_free (event_str);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response,
+                     (ami->api_major && ami->api_minor) ? "Success"
+                                                        : "Events Off",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4777,7 +4624,7 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4816,10 +4663,6 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: UserEvent\r\n");
     g_string_append_printf (action, "UserEvent: %s\r\n", user_event);
 
@@ -4835,8 +4678,10 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
     }
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4845,7 +4690,7 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 /**
@@ -4882,18 +4727,16 @@ gami_manager_wait_event (GamiManager *ami, guint timeout,
 
     g_assert (priv->connected == TRUE);
 
-    priv->response_value_func = get_bool_response;
-    priv->response_func = response_func;
-    priv->response_data = response_data;
-
     action = g_string_new ("Action: WaitEvent\r\n");
 
     if (timeout)
         g_string_append_printf (action, "Timeout: %d\r\n", timeout);
 
     action_id_new = get_action_id (action_id);
+    add_action_hook (ami, action_id_new,
+                     process_bool_response, "Success",
+                     response_func, response_data);
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
-    g_free (action_id_new);
 
     g_string_append (action, "\r\n");
 
@@ -4902,7 +4745,7 @@ gami_manager_wait_event (GamiManager *ami, guint timeout,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id, error);
+    return action_response (ami, iostatus, action_id_new, error);
 }
 
 
@@ -5065,67 +4908,6 @@ send_command (GIOChannel *channel, const gchar *command, GError **error)
     return status;
 }
 
-static GIOStatus
-receive_packet (GIOChannel *chan, GHashTable **pkt, GError **error)
-{
-    GIOStatus status;
-    gboolean package_received;
-
-    g_assert (pkt != NULL && *pkt == NULL);
-    g_assert (error == NULL || *error == NULL);
-
-    *pkt = g_hash_table_new_full (g_str_hash, g_str_equal, g_free, g_free);
-
-    g_debug ("Reveiving an GAMI packet");
-
-    package_received = FALSE;
-    while (! package_received) {
-        gchar *line;
-        gchar **tokens;
-
-        while ((status = g_io_channel_read_line (chan, &line,
-                                                 NULL, NULL,
-                                                 error)) == G_IO_STATUS_AGAIN);
-
-        if (status != G_IO_STATUS_NORMAL) {
-            g_assert (error == NULL || *error != NULL);
-            g_warning ("An error occurred during package reception\n");
-            g_free (line);
-            break;
-        }
-
-        g_assert (error == NULL || *error == NULL);
-
-        tokens = g_strsplit (line, ":", 2);
-        if (g_strv_length (tokens) == 2) {
-            gchar *key, *value;
-
-            key = g_strdup (g_strstrip (tokens [0]));
-            value = g_strdup (g_strstrip (tokens [1]));
-
-            g_hash_table_insert (*pkt, key, value);
-        }
-        g_strfreev (tokens);
-
-        if (strcmp (line, "\r\n") == 0)
-            package_received = TRUE;
-        else
-            g_debug ("   %s", g_strchomp (line));
-
-
-        g_free (line);
-    }
-
-    g_debug ("GAMI packet received");
-
-    if (status != G_IO_STATUS_NORMAL) {
-        g_hash_table_destroy (*pkt);
-        *pkt = NULL;
-    }
-
-    return status;
-}
-
 static gboolean
 reconnect_socket (GamiManager *ami)
 {
@@ -5158,31 +4940,106 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
         return FALSE;
 
     } else if (cond == G_IO_IN || cond == G_IO_PRI) {
-        GHashTable *packet = NULL;
-        GIOStatus status;
+        static GHashTable *packet = NULL;
+        GError            *error  = NULL;
+        gchar             *line;
+        GIOStatus          status;
 
-        while ((status = receive_packet (chan,
-                                         &packet,
-                                         NULL)) == G_IO_STATUS_AGAIN);
+        if (! packet) {
+            packet = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                            g_free, g_free);
 
-        if (packet) {
-            if (status == G_IO_STATUS_NORMAL) {
-                if (g_hash_table_lookup (packet, "Event"))
-                    g_signal_emit (mgr, signals [EVENT], 0, packet);
-                else if (g_hash_table_lookup (packet, "Response"))
-                    if (priv->response_func) {
-                        GamiResponse *resp;
-                        resp = priv->response_value_func (mgr, packet);
-                        priv->response_func (resp, priv->response_data);
-                        gami_response_unref (resp);
-                    }
+            g_debug ("Reveiving an GAMI packet");
+        }
+
+        status = g_io_channel_read_line (chan, &line, NULL, NULL, &error);
+
+        if (status == G_IO_STATUS_NORMAL) {
+            gchar **tokens;
+
+            tokens = g_strsplit (line, ":", 2);
+            if (g_strv_length (tokens) == 2) {
+                gchar *key, *value;
+
+                key = g_strdup (g_strstrip (tokens [0]));
+                value = g_strdup (g_strstrip (tokens [1]));
+
+                g_hash_table_insert (packet, key, value);
             }
+            g_strfreev (tokens);
 
-            g_hash_table_unref (packet);
+            if (strcmp (line, "\r\n") == 0) {
+                g_debug ("GAMI packet received.");
+
+                process_packet (mgr, packet);
+                g_hash_table_unref (packet);
+                packet = NULL;
+            } else
+                g_debug ("   %s", g_strchomp (line));
+        }
+
+        g_free (line);
+
+        if (status == G_IO_STATUS_ERROR) {
+                g_warning ("An error occurred during package reception%s%s\n",
+                           error ? ": " : "",
+                           error ? error->message : "");
+                if (error)
+                    g_error_free (error);
         }
     }
 
     return TRUE;
+}
+
+static void
+process_packet (GamiManager *mgr, GHashTable *packet)
+{
+    GamiManagerPrivate *priv;
+    gchar              *action_id;
+
+    g_assert (packet != NULL);
+
+    priv = GAMI_MANAGER_PRIVATE (mgr);
+
+    action_id = g_hash_table_lookup (packet, "ActionID");
+    if (action_id) {
+        GamiActionHook *hook;
+
+        if ((hook = g_hash_table_lookup (priv->action_hooks, action_id))) {
+            GamiResponse *resp;
+
+            resp = hook->handler_func (packet, hook->handler_data);
+            if (resp) {
+                if (hook->user_func)
+                    hook->user_func (resp, hook->user_data);
+                else
+                    priv->sync_response = gami_response_ref (resp);
+
+                gami_response_unref (resp);
+            }
+        }
+    } else if (g_hash_table_lookup (packet, "Event"))
+        g_signal_emit (mgr, signals [EVENT], 0, packet);
+}
+
+static void
+add_action_hook (GamiManager *mgr, gchar *action_id,
+                 GamiResponseHandlerFunc handler_func, gpointer handler_data,
+                 GamiResponseFunc user_func, gpointer user_data)
+{
+    GamiManagerPrivate *priv;
+    GamiActionHook     *hook;
+
+    priv = GAMI_MANAGER_PRIVATE (mgr);
+    hook = g_new0 (GamiActionHook, 1);
+
+    hook->handler_func = handler_func;
+    hook->handler_data = handler_data;
+    hook->user_func = user_func;
+    hook->user_data = user_data;
+
+    g_hash_table_insert (priv->action_hooks, action_id, hook);
 }
 
 static GamiResponse *
@@ -5190,10 +5047,14 @@ action_response (GamiManager *mgr, GIOStatus status, const gchar *action_id,
                  GError **error)
 {
     GamiManagerPrivate *priv;
+    GamiActionHook     *hook;
+    GamiResponse       *response;
 
     priv = GAMI_MANAGER_PRIVATE (mgr);
 
-    if (status != G_IO_STATUS_NORMAL || priv->response_func) {
+    hook = g_hash_table_lookup (priv->action_hooks, action_id);
+
+    if (status != G_IO_STATUS_NORMAL || hook->user_func) {
         GValue      *value;
 
         value = g_new0 (GValue, 1);
@@ -5204,39 +5065,16 @@ action_response (GamiManager *mgr, GIOStatus status, const gchar *action_id,
         return gami_response_new (value, NULL, (gchar *) action_id);
     }
 
-    return ami_wait_response (mgr, error);
-}
-
-static GamiResponse *
-ami_wait_response (GamiManager *mgr, GError **error)
-{
-    GamiManagerPrivate *priv;
-    GamiResponse *response = NULL;
-    GHashTable *pkt = NULL;
-    GIOStatus status;
-
-    priv = GAMI_MANAGER_PRIVATE (mgr);
-
-    while (! response) {
-        while ((status = receive_packet (priv->socket,
-                                         &pkt,
-                                         NULL)) == G_IO_STATUS_AGAIN);
-
-        if (pkt) {
-            if (status == G_IO_STATUS_NORMAL
-                && g_hash_table_lookup (pkt, "Response"))
-                response = priv->response_value_func (mgr, pkt);
-
-            g_hash_table_unref (pkt);
-            pkt = NULL;
-        }
-    }
+    /* wait for response packet */
+    while (! (response = priv->sync_response))
+        g_main_context_iteration (NULL, FALSE);
+    priv->sync_response = NULL;
 
     return response;
 }
 
 static GamiResponse *
-get_bool_response (GamiManager *mgr, GHashTable *pkt)
+process_bool_response (GHashTable *packet, gpointer expected)
 {
     GValue      *value;
     gchar       *action_id;
@@ -5245,10 +5083,10 @@ get_bool_response (GamiManager *mgr, GHashTable *pkt)
     value = g_new0 (GValue, 1);
     value = g_value_init (value, G_TYPE_BOOLEAN);
 
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
+    message = g_hash_table_lookup (packet, "Message");
+    action_id = g_hash_table_lookup (packet, "ActionID");
 
-    if (! check_response (pkt, "Success"))
+    if (! check_response (packet, (gchar *) expected))
         g_value_set_boolean (value, FALSE);
     else
         g_value_set_boolean (value, TRUE);
@@ -5257,636 +5095,110 @@ get_bool_response (GamiManager *mgr, GHashTable *pkt)
 }
 
 static GamiResponse *
-get_ping_response (GamiManager *mgr, GHashTable *pkt)
+process_string_response (GHashTable *packet, gpointer return_key)
 {
     GValue      *value;
-    gchar       *message;
     gchar       *action_id;
+    gchar       *message;
 
     value = g_new0 (GValue, 1);
-    value = g_value_init (value, G_TYPE_BOOLEAN);
+    message = g_hash_table_lookup (packet, "Message");
+    action_id = g_hash_table_lookup (packet, "ActionID");
 
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Pong"))
-        g_value_set_boolean (value, FALSE);
-    else
-        g_value_set_boolean (value, TRUE);
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_events_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-
-    value = g_new0 (GValue, 1);
-    value = g_value_init (value, G_TYPE_BOOLEAN);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Events Off"))
-        g_value_set_boolean (value, FALSE);
-    else
-        g_value_set_boolean (value, TRUE);
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_logoff_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-
-    value = g_new0 (GValue, 1);
-    value = g_value_init (value, G_TYPE_BOOLEAN);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Goodbye"))
-        g_value_set_boolean (value, FALSE);
-    else
-        g_value_set_boolean (value, TRUE);
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_hash_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_strdup (g_hash_table_lookup (pkt, "Message"));
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
+    if (! check_response (packet, "Success")) {
         value = g_value_init (value, G_TYPE_BOOLEAN);
         g_value_set_boolean (value, FALSE);
     } else {
-        g_hash_table_remove (pkt, "Response");
-        g_hash_table_remove (pkt, "Message");
+        value = g_value_init (value, G_TYPE_STRING);
+        g_value_set_string (value, g_hash_table_lookup (packet,
+                                                        (gchar *) return_key));
+    }
+
+    return gami_response_new (value, message, action_id);
+}
+
+static GamiResponse *
+process_hash_response (GHashTable *packet, gpointer unused)
+{
+    GValue      *value;
+    gchar       *message;
+    gchar       *action_id;
+
+    value = g_new0 (GValue, 1);
+
+    message = g_strdup (g_hash_table_lookup (packet, "Message"));
+    action_id = g_hash_table_lookup (packet, "ActionID");
+
+    if (! check_response (packet, "Success")) {
+        value = g_value_init (value, G_TYPE_BOOLEAN);
+        g_value_set_boolean (value, FALSE);
+    } else {
+        g_hash_table_remove (packet, "Response");
+        g_hash_table_remove (packet, "Message");
 
         value = g_value_init (value, G_TYPE_HASH_TABLE);
-        g_value_set_boxed (value, g_hash_table_ref (pkt));
+        g_value_set_boxed (value, g_hash_table_ref (packet));
     }
 
     return gami_response_new (value, message, action_id);
 }
 
 static GamiResponse *
-get_challenge_response (GamiManager *mgr, GHashTable *pkt)
+process_list_response (GHashTable *packet, gpointer stop_event)
 {
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    gchar       *resp_value;
+    static GSList *list = NULL;
+    static gchar  *message = NULL;
+    gchar         *event;
 
-    value = g_new0 (GValue, 1);
+    if (g_hash_table_lookup (packet, "Response")) {
+        if (list) {              /* clean up left overs */
+            g_slist_foreach (list, (GFunc) g_hash_table_destroy, NULL);
+            g_slist_free (list);
 
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-    resp_value = g_hash_table_lookup (pkt, "Challenge");
-
-    if (! check_response (pkt, "Success") || ! resp_value) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        value = g_value_init (value, G_TYPE_STRING);
-        g_value_set_string (value, strdup (resp_value));
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_getvar_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    gchar       *resp_value;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-    resp_value = g_hash_table_lookup (pkt, "Value");
-
-    if (! check_response (pkt, "Success") || ! resp_value) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        value = g_value_init (value, G_TYPE_STRING);
-        g_value_set_string (value, strdup (resp_value));
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_dbget_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    gchar       *resp_value;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-    resp_value = g_hash_table_lookup (pkt, "Val");
-
-    if (! check_response (pkt, "Success") || ! resp_value) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        value = g_value_init (value, G_TYPE_STRING);
-        g_value_set_string (value, strdup (resp_value));
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_zaplist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "ZapShowChannels",
-                               "ZapShowChannelsComplete", NULL, &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
+            list = NULL;
         }
+
+        if (! check_response (packet, "Success"))
+            return process_bool_response (packet, "Success");  /* error */
+
+        if (message)
+            g_free (message);
+        message = g_strdup (g_hash_table_lookup (packet, "Message"));
+
+        return NULL;
     }
 
-    return gami_response_new (value, message, action_id);
-}
+    event = g_hash_table_lookup (packet, "Event");
+    if (! strcmp (event, (gchar *) stop_event)) {
+        GamiResponse *resp;
+        GValue *value;
 
-static GamiResponse *
-get_dahdilist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
+        list = g_slist_reverse (list);
 
-    value = g_new0 (GValue, 1);
+        value = g_new0 (GValue, 1);
+        value = g_value_init (value, G_TYPE_SLIST);
+        g_value_take_boxed (value, g_slist_copy (list));
 
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
+        resp = gami_response_new (value, message,
+                                  g_hash_table_lookup (packet, "ActionID"));
 
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
+        /* cleanup */
+        if (message)
+            g_free (message);
+
+        list = NULL;
+        message = NULL;
+
+        return resp;
+
     } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
+        if (event)
+            g_hash_table_remove (packet, "Event");
 
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "DAHDIShowChannels",
-                               "DAHDIShowChannelsComplete", "Items", &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
+        list = g_slist_prepend (list, g_hash_table_ref (packet));
     }
 
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_agentlist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "Agents", "AgentsComplete",
-                               NULL, &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_parklist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "ParkedCall",
-                               "ParkedCallsComplete", NULL, &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_meetmelist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "MeetmeList",
-                               "MeetmeListComplete", "ListItems", &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_siplist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "PeerEntry",
-                               "PeerlistComplete", "ListItems", &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_iaxlist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "PeerEntry",
-                               "PeerlistComplete", "ListItems", &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_showchannelslist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, NULL,
-                               "CoreShowChannelsComplete", "ListItems",
-                               &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_sipregistrylist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "RegistryEntry",
-                               "RegistrationsComplete", "ListItems", &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_statuslist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "Status", "StatusComplete",
-                               NULL, &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_queuelist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "QueueSummary",
-                               "QueueSummaryComplete", NULL, &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
-}
-
-static GamiResponse *
-get_voicemaillist_response (GamiManager *mgr, GHashTable *pkt)
-{
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
-    GError      *error = NULL;
-
-    value = g_new0 (GValue, 1);
-
-    message = g_hash_table_lookup (pkt, "Message");
-    action_id = g_hash_table_lookup (pkt, "ActionID");
-
-    if (! check_response (pkt, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        GamiManagerPrivate *priv;
-        GSList *list = NULL;
-
-        priv = GAMI_MANAGER_PRIVATE (mgr);
-        if (get_response_list (priv->socket, &list, "VoicemailUserEntry",
-                               "VoicemailUserEntryComplete", NULL, &error)) {
-            value = g_value_init (value, G_TYPE_SLIST);
-            g_value_set_boxed (value, list);
-        } else {
-            value = g_value_init (value, G_TYPE_BOOLEAN);
-            g_value_set_boolean (value, FALSE);
-
-            if (error) {
-                message = g_strdup (error->message);
-                g_error_free (error);
-            }
-        }
-    }
-
-    return gami_response_new (value, message, action_id);
+    return NULL; /* list not complete, wait for more packets */
 }
 
 static gboolean
@@ -5898,72 +5210,6 @@ check_response (GHashTable *pkt, const gchar *value)
     if (g_strcmp0 (g_hash_table_lookup (pkt, "Response"), value) != 0) {
         return FALSE;
     }
-    return TRUE;
-}
-
-static gboolean
-get_response_list (GIOChannel *chan, GSList **list, gchar *list_event,
-                   gchar *stop_event, gchar *check_num, GError **error)
-{
-    gint listitems = -1;
-    gboolean list_complete = FALSE;
-
-    g_assert (error == NULL || *error == NULL);
-    g_assert (list != NULL && *list == NULL);
-
-    while (! list_complete) {
-        GIOStatus status;
-        GHashTable *packet = NULL;
-        gchar *event;
-
-        while ((status = receive_packet (chan,
-                                         &packet,
-                                         error)) == G_IO_STATUS_AGAIN);
-
-        if (status != G_IO_STATUS_NORMAL) {
-            g_assert (error == NULL || *error != NULL);
-
-            if (*list) {
-                g_slist_foreach (*list, (GFunc)g_hash_table_destroy, NULL);
-                g_slist_free (*list);
-            }
-
-            return FALSE;
-        }
-
-        g_assert (error == NULL || *error == NULL);
-
-        event = g_hash_table_lookup (packet, "Event");
-        if (event) {
-            if (list_event && ! strcmp (event, list_event)) {
-                g_hash_table_remove (packet, "Event");
-                *list = g_slist_prepend (*list, packet);
-                packet = NULL;
-            } else if (! strcmp (event, stop_event)) {
-                list_complete = TRUE;
-                if (check_num)
-                    listitems = atoi (g_hash_table_lookup (packet, check_num));
-                g_hash_table_destroy (packet);
-            } else {
-                /* this is just a test, we should get rid of this longterm */
-                //printf ("Ups, unexpected event in get_response_list(): %s\n",
-                //        event);
-                g_hash_table_destroy (packet);
-                packet = NULL;
-            }
-        } else if (! list_event) {
-            *list = g_slist_prepend (*list, packet);
-            packet = NULL;
-        }
-    }
-
-    if (listitems != -1 && listitems != g_slist_length (*list)) {
-        g_warning ("Wrong element number in list, expected %d, received %d",
-                   listitems, g_slist_length (*list));
-    }
-
-    *list = g_slist_reverse (*list);
-
     return TRUE;
 }
 
@@ -5994,6 +5240,8 @@ gami_manager_init (GamiManager *object)
 
     priv = GAMI_MANAGER_PRIVATE (object);
     priv->connected = FALSE;
+    priv->action_hooks = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                g_free, g_free);
 }
 
 static void
@@ -6006,15 +5254,13 @@ gami_manager_finalize (GObject *object)
     if (priv->socket) {
         while (g_source_remove_by_user_data (object));
         g_io_channel_shutdown (priv->socket, TRUE, NULL);
-        g_debug ("Socket has been shut down");
         g_io_channel_unref (priv->socket);
-        g_debug ("Channel has been unreffed");
     }
     g_free (priv->host);
     g_free (priv->port);
     if (GAMI_MANAGER (object)->api_version)
         g_free ((gchar *) GAMI_MANAGER (object)->api_version);
-    g_debug ("Member variables have been freed");
+    g_hash_table_destroy (priv->action_hooks);
 
     G_OBJECT_CLASS (gami_manager_parent_class)->finalize (object);
 }
