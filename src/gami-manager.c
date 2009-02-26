@@ -306,10 +306,8 @@ gami_manager_connect (GamiManager *ami, GError **error)
     }
 
     g_io_channel_set_flags (priv->socket, G_IO_FLAG_NONBLOCK, error);
-    g_io_add_watch (priv->socket, G_IO_IN,  (GIOFunc) dispatch_ami, ami);
-    g_io_add_watch (priv->socket, G_IO_PRI, (GIOFunc) dispatch_ami, ami);
-    g_io_add_watch (priv->socket, G_IO_ERR, (GIOFunc) dispatch_ami, ami);
-    g_io_add_watch (priv->socket, G_IO_HUP, (GIOFunc) dispatch_ami, ami);
+    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+                    (GIOFunc) dispatch_ami, ami);
 
     return priv->connected;
 }
@@ -4930,10 +4928,11 @@ static gboolean
 dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
 {
     GamiManagerPrivate *priv;
+    GIOStatus           status;
 
     priv = GAMI_MANAGER_PRIVATE (mgr);
 
-    if (cond == G_IO_HUP || cond == G_IO_ERR) {
+    if (cond & (G_IO_HUP | G_IO_ERR)) {
 
         priv->connected = FALSE;
         g_signal_emit (mgr, signals [DISCONNECTED], 0);
@@ -4941,54 +4940,57 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
 
         return FALSE;
 
-    } else if (cond == G_IO_IN || cond == G_IO_PRI) {
-        static GHashTable *packet = NULL;
+    } else if (cond & (G_IO_IN | G_IO_PRI)) {
         GError            *error  = NULL;
-        gchar             *line;
-        GIOStatus          status;
 
-        status = g_io_channel_read_line (chan, &line, NULL, NULL, &error);
+        do {
+            static GHashTable *packet = NULL;
+            gchar             *line;
 
-        if (status == G_IO_STATUS_NORMAL) {
-            gchar **tokens;
+            status = g_io_channel_read_line (chan, &line, NULL, NULL, &error);
 
-            if (! packet) {
-                packet = g_hash_table_new_full (g_str_hash, g_str_equal,
-                                                g_free, g_free);
+            if (status == G_IO_STATUS_NORMAL) {
+                gchar **tokens;
 
-                g_debug ("Reveiving an GAMI packet");
+                if (! packet) {
+                    packet = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                    g_free, g_free);
+
+                    g_debug ("Reveiving an GAMI packet");
+                }
+
+                tokens = g_strsplit (line, ": ", 2);
+                if (g_strv_length (tokens) == 2) {
+                    gchar *key, *value;
+
+                    key = g_strdup (g_strchomp (tokens [0]));
+                    value = g_strdup (g_strchomp (tokens [1]));
+
+                    g_debug ("   %s: %s", key, value);
+
+                    g_hash_table_insert (packet, key, value);
+                }
+                g_strfreev (tokens);
+
+                if (g_str_has_prefix (line, "\r\n")) {
+                    g_debug ("GAMI packet received.");
+
+                    process_packet (mgr, packet);
+                    g_hash_table_unref (packet);
+                    packet = NULL;
+                }
             }
 
-            tokens = g_strsplit (line, ": ", 2);
-            if (g_strv_length (tokens) == 2) {
-                gchar *key, *value;
+            g_free (line);
 
-                key = g_strdup (g_strchomp (tokens [0]));
-                value = g_strdup (g_strchomp (tokens [1]));
-
-                g_debug ("   %s: %s", key, value);
-
-                g_hash_table_insert (packet, key, value);
-            }
-            g_strfreev (tokens);
-
-            if (g_str_has_prefix (line, "\r\n")) {
-                g_debug ("GAMI packet received.");
-
-                process_packet (mgr, packet);
-                g_hash_table_unref (packet);
-                packet = NULL;
-            }
-        }
-
-        g_free (line);
+        } while (g_io_channel_get_buffer_condition (chan) & G_IO_IN);
 
         if (status == G_IO_STATUS_ERROR) {
-                g_warning ("An error occurred during package reception%s%s\n",
-                           error ? ": " : "",
-                           error ? error->message : "");
-                if (error)
-                    g_error_free (error);
+            g_warning ("An error occurred during package reception%s%s\n",
+                       error ? ": " : "",
+                       error ? error->message : "");
+            if (error)
+                g_error_free (error);
         }
     }
 
