@@ -1,6 +1,6 @@
 SUBDIRS = src po docs
 
-gamidocdir = $(datadir)/doc/gami
+gamidocdir = $(datadir)/doc/libgami
 gamidoc_DATA = \
 	README\
 	COPYING\
@@ -27,10 +27,6 @@ DISTCLEANFILES = \
 DISTCHECK_CONFIGURE_FLAGS=--enable-gtk-doc
 
 if ENABLE_SVN2CL
-	@SVN2CL@ --group-by-day -o $(distdir)/ChangeLog
-endif
-
-install-data-hook:
-if ENABLE_SVN2CL
-	@SVN2CL@ --group-by-day -o $(gamidocdir)/ChangeLog
+ChangeLog: .svn/entries
+	@SVN2CL@ @SVN2CL_OPTIONS@
 endif

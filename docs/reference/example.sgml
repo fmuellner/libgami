@@ -1,0 +1,75 @@
+<refentry id="libgami-example">
+<refmeta>
+<refentrytitle>Libgami code example</refentrytitle>
+<refmiscinfo>Libgami Library</refmiscinfo>
+</refmeta>
+
+<refnamediv>
+<refname>Libgami code example</refname>
+<refpurpose>A small sample program to demonstrate Libgami usage</refpurpose>
+</refnamediv>
+
+<refsect1>
+	<title>Howto use Libgami</title>
+	<para>
+		Libgami supports both synchronous and asynchronous usage. The following
+		sample program will demonstrate either one. It will not cover every 
+		aspect of Libgami, e.g. action responses returning non-booleans and 
+		manager events are not shown here, but it should give you a general 
+		idea about Libgami usage and provide you with a starting point.
+	</para>
+	<programlisting role="C"><![CDATA[
+#include <stdio.h>
+#include <gami.h>
+
+void
+gami_ping_cb (GamiResponse *response, gpointer data)
+{
+	GMainLoop *loop = data;
+
+	if (gami_response_success (response))
+		printf ("PONG!\n");
+	else
+		printf ("Failed to ping server.\n");
+	
+	g_main_loop_quit (loop);
+}
+
+int
+main (int argc, char *argv [])
+{
+	GMainLoop    *loop;
+	GamiManager  *manager;
+	GamiResponse *response;
+
+	gami_init (&argc, &argv);
+
+	loop = g_main_loop_new (NULL, FALSE);
+
+	manager = gami_manager_new ("localhost", "5038");
+	g_assert (manager != NULL);
+
+	response = gami_manager_login (manager, "foo", "bar",
+	                               NULL, GAMI_EVENT_MASK_NONE,
+	                               NULL, NULL, NULL, NULL);
+	
+	g_assert (gami_response_success (response));
+	gami_response_unref (response);
+
+	response = gami_manager_ping (manager, NULL,
+	                              gami_ping_cb, (gpointer) loop, NULL);
+
+	g_assert (gami_response_success (response));
+	gami_response_unref (response);
+
+	g_main_loop_run (loop);
+	
+	response = gami_manager_logoff (manager, NULL, NULL, NULL, NULL);
+	gami_response_unref (response);
+
+	return 0;
+}
+	]]>
+	</programlisting>
+</refsect1>
+</refentry>

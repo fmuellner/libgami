@@ -144,6 +144,8 @@ then
 	AC_MSG_RESULT([$enable_svn2cl])
 fi
 
+SVN2CL_OPTIONS="--group-by-day --authors=AUTHORS -i --break-before-msg"
+AC_SUBST(SVN2CL_OPTIONS)
 AM_CONDITIONAL([ENABLE_SVN2CL],[test "$enable_svn2cl" = "yes"])
 
 
@@ -162,9 +164,9 @@ docs/reference/version.xml
 
 echo "
 Configure summary:
-      Gtk-Doc Support......:  $enable_gtk_doc
-      GObj. Introspection..:  $enable_introspection
-      ChangeLog Generation.:  $enable_svn2cl
+      Gtk-Doc Support........:  $enable_gtk_doc
+      GObj. Introspection....:  $enable_introspection
+      Auto-update ChangeLog..:  $enable_svn2cl
 
 Now type 'make' to build.
 "
