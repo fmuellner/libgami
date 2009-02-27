@@ -4867,9 +4867,14 @@ get_action_id (const gchar *action_id)
     if (action_id)
         return g_strdup (action_id);
 
+#ifndef G_OS_WIN32
     template = g_strdup_printf ("XXXXXX");
+    mktemp (template);
+#else
+    template = g_strdup_printf ("%d", g_random_int_range (100000, 999999));
+#endif
 
-    return mktemp (template);
+    return template;
 }
 
 static GIOStatus
