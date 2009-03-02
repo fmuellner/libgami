@@ -1,5 +1,24 @@
+2009-03-02  Florian Müllner <florian.muellner@gmail.com>
+
+	* [r343] docs/reference/building.sgml,
+	  docs/reference/compiling.sgml:
+	  Documentation update
+
+2009-02-27  Florian Müllner <florian.muellner@gmail.com>
+
+	* [r339] src/gami-manager.c:
+	  Do not use mktemp() when generating a random ActionID on Windows.
+	  Fixes #10.
+	* [r337] autogen.sh:
+	  Updated autogen.sh to check for AC_PROG_LIBTOOL instead of
+	  AM_PROG_LIBTOOL
+
 2009-02-26  Florian Müllner <florian.muellner@gmail.com>
 
+	* [r336] AUTHORS, ChangeLog, Makefile.am, configure.ac,
+	  docs/reference/Makefile.am, docs/reference/example.sgml,
+	  docs/reference/libgami-docs.sgml:
+	  Documentation update. Fixes #19.
 	* [r335] src/gami-manager.c:
 	  I consulted the documentation again, GIOCondition '''is''' a
 	  flag, so the last modification was not the correct solution after

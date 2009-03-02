@@ -96,7 +96,7 @@ G_IR_SCANNER=
 G_IR_COMPILER=
 G_IR_GENERATE=
 GIRDIR=
-GIRTYPELIBDIR=
+TYPELIBDIR=
 
 
 if test "$enable_introspection" = "yes";
