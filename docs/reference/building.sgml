@@ -46,6 +46,9 @@
 			<group>
 				<arg>--enable-gtk-doc=[auto|yes|no]</arg>
 			</group>
+			<group>
+				<arg>--enable-introspection=[yes|no]</arg>
+			</group>
 		</cmdsynopsis>
 	</para>
 
@@ -56,6 +59,16 @@
 			Build API documentation for Libgami. Note that you must 
 			have <application>gtk-doc</application> installed on 
 			your system for this option to work
+		</para>
+	</formalpara>
+	<formalpara>
+		<title><systemitem>--enable-introspection</systemitem></title>
+		
+		<para>
+			Build GIR and typelib files for gobject-introspection. 
+			You will need <package>gobject-introspection</package> 
+			at a minimum version of 0.6.2 for this to work.
+			This option defaults to no.
 		</para>
 	</formalpara>
 </refsect1>
