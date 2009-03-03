@@ -1,5 +1,7 @@
 2009-03-02  Florian Müllner <florian.muellner@gmail.com>
 
+	* [r344] ChangeLog, configure.ac, src/Makefile.am:
+	  Some build system cleanup
 	* [r343] docs/reference/building.sgml,
 	  docs/reference/compiling.sgml:
 	  Documentation update
