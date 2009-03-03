@@ -305,9 +305,17 @@ gami_manager_connect (GamiManager *ami, GError **error)
         g_signal_emit (ami, signals [CONNECTED], 0);
     }
 
-    g_io_channel_set_flags (priv->socket, G_IO_FLAG_NONBLOCK, error);
-    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
-                    (GIOFunc) dispatch_ami, ami);
+	{
+		guint source;
+
+		g_io_channel_set_flags (priv->socket, G_IO_FLAG_NONBLOCK, error);
+		source = g_io_add_watch (priv->socket,
+								 G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+								 (GIOFunc) dispatch_ami, ami);
+		g_source_set_can_recurse (g_main_context_find_source_by_id (NULL,
+																	source),
+								  TRUE);
+	}
 
     return priv->connected;
 }
