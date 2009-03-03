@@ -271,7 +271,7 @@ gami_manager_connect (GamiManager *ami, GError **error)
 
     if ((rv = getaddrinfo (priv->host, priv->port, &hints, &result)) != 0) {
         g_warning ("Error resolving host '%s': %s", priv->host,
-				   gai_strerror (rv));
+                   gai_strerror (rv));
         return FALSE;
     }
 
@@ -1228,9 +1228,9 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
  */
 GamiResponse *
 gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
-						   const gchar *iface, const gchar *action_id,
-						   GamiResponseFunc response_func,
-						   gpointer response_data, GError **error)
+                           const gchar *iface, const gchar *action_id,
+                           GamiResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4779,7 +4779,7 @@ parse_connection_string (GamiManager *ami, GError **error)
     priv = GAMI_MANAGER_PRIVATE (ami);
 
     status = g_io_channel_read_line (priv->socket, &welcome_message,
-				     NULL, NULL, error);
+                     NULL, NULL, error);
 
     if (status != G_IO_STATUS_NORMAL) {
         return FALSE;
@@ -4946,6 +4946,7 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
         return FALSE;
 
     } else if (cond & (G_IO_IN | G_IO_PRI)) {
+        GSList            *packets = NULL;
         GError            *error  = NULL;
 
         do {
@@ -4980,8 +4981,7 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
                 if (g_str_has_prefix (line, "\r\n")) {
                     g_debug ("GAMI packet received.");
 
-                    process_packet (mgr, packet);
-                    g_hash_table_unref (packet);
+                    packets = g_slist_prepend (packets, packet);
                     packet = NULL;
                 }
             }
@@ -4996,6 +4996,17 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
                        error ? error->message : "");
             if (error)
                 g_error_free (error);
+        }
+
+        if ((packets = g_slist_reverse (packets))) {
+            GSList *packet;
+
+            for (packet = packets; packet; packet = packet->next)
+                if (GAMI_IS_MANAGER (mgr))
+                    process_packet (mgr, (GHashTable *) packet->data);
+            g_slist_foreach (packets, (GFunc) g_hash_table_unref, NULL);
+
+            g_slist_free (packets);
         }
     }
 
@@ -5016,8 +5027,8 @@ process_packet (GamiManager *mgr, GHashTable *packet)
     if (action_id || g_hash_table_lookup (packet, "Response")) {
         GamiActionHook *hook;
 
-		hook = action_id ? g_hash_table_lookup (priv->action_hooks, action_id)
-		                 : g_hash_table_lookup (priv->action_hooks, "current");
+        hook = action_id ? g_hash_table_lookup (priv->action_hooks, action_id)
+                         : g_hash_table_lookup (priv->action_hooks, "current");
         if (hook) {
             GamiResponse *resp;
 
@@ -5045,7 +5056,7 @@ add_action_hook (GamiManager *mgr, gchar *action_id,
 
     priv = GAMI_MANAGER_PRIVATE (mgr);
     hook = g_new0 (GamiActionHook, 1);
-	current_hook = g_new0 (GamiActionHook, 1);
+    current_hook = g_new0 (GamiActionHook, 1);
 
     hook->handler_func = current_hook->handler_func = handler_func;
     hook->handler_data = current_hook->handler_data = handler_data;
@@ -5053,8 +5064,8 @@ add_action_hook (GamiManager *mgr, gchar *action_id,
     hook->user_data = current_hook->user_data = user_data;
 
     g_hash_table_insert (priv->action_hooks, action_id, hook);
-	g_hash_table_insert (priv->action_hooks, g_strdup ("current"),
-						 current_hook);
+    g_hash_table_insert (priv->action_hooks, g_strdup ("current"),
+                         current_hook);
 }
 
 static GamiResponse *
