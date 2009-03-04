@@ -99,6 +99,7 @@ struct _GamiManagerPrivate
 
     GHashTable *action_hooks;
     GamiResponse *sync_response;
+    GQueue *buffer;
 };
 
 #define GAMI_MANAGER_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), \
@@ -141,7 +142,7 @@ static GIOStatus send_command (GIOChannel *c, const gchar *cmd, GError **e);
 static gboolean dispatch_ami (GIOChannel *chan,
                               GIOCondition cond,
                               GamiManager *ami);
-static void process_packet (GamiManager *manager, GHashTable *packet);
+static gboolean process_packets (GamiManager *manager);
 static void add_action_hook (GamiManager *manager, gchar *action_id,
                              GamiResponseHandlerFunc handler_func,
                              gpointer handler_data,
@@ -305,17 +306,9 @@ gami_manager_connect (GamiManager *ami, GError **error)
         g_signal_emit (ami, signals [CONNECTED], 0);
     }
 
-	{
-		guint source;
-
-		g_io_channel_set_flags (priv->socket, G_IO_FLAG_NONBLOCK, error);
-		source = g_io_add_watch (priv->socket,
-								 G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
-								 (GIOFunc) dispatch_ami, ami);
-		g_source_set_can_recurse (g_main_context_find_source_by_id (NULL,
-																	source),
-								  TRUE);
-	}
+    g_io_channel_set_flags (priv->socket, G_IO_FLAG_NONBLOCK, error);
+    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+                    (GIOFunc) dispatch_ami, ami);
 
     return priv->connected;
 }
@@ -4941,21 +4934,12 @@ static gboolean
 dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
 {
     GamiManagerPrivate *priv;
-    GIOStatus           status;
+    GIOStatus           status = G_IO_STATUS_NORMAL;
 
     priv = GAMI_MANAGER_PRIVATE (mgr);
 
-    if (cond & (G_IO_HUP | G_IO_ERR)) {
-
-        priv->connected = FALSE;
-        g_signal_emit (mgr, signals [DISCONNECTED], 0);
-        g_idle_add ((GSourceFunc) reconnect_socket, mgr);
-
-        return FALSE;
-
-    } else if (cond & (G_IO_IN | G_IO_PRI)) {
-        GSList            *packets = NULL;
-        GError            *error  = NULL;
+    if (cond & (G_IO_IN | G_IO_PRI)) {
+        GError *error  = NULL;
 
         do {
             static GHashTable *packet = NULL;
@@ -4989,7 +4973,7 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
                 if (g_str_has_prefix (line, "\r\n")) {
                     g_debug ("GAMI packet received.");
 
-                    packets = g_slist_prepend (packets, packet);
+                    g_queue_push_tail (priv->buffer, packet);
                     packet = NULL;
                 }
             }
@@ -5006,30 +4990,34 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
                 g_error_free (error);
         }
 
-        if ((packets = g_slist_reverse (packets))) {
-            GSList *packet;
+        if (! g_queue_is_empty (priv->buffer))
+            g_timeout_add (0, (GSourceFunc) process_packets, mgr);
+    }
 
-            for (packet = packets; packet; packet = packet->next)
-                if (GAMI_IS_MANAGER (mgr))
-                    process_packet (mgr, (GHashTable *) packet->data);
-            g_slist_foreach (packets, (GFunc) g_hash_table_unref, NULL);
+    if (cond & (G_IO_HUP | G_IO_ERR) || status == G_IO_STATUS_EOF) {
 
-            g_slist_free (packets);
-        }
+        priv->connected = FALSE;
+        g_signal_emit (mgr, signals [DISCONNECTED], 0);
+        g_idle_add ((GSourceFunc) reconnect_socket, mgr);
+
+        return FALSE;
+
     }
 
     return TRUE;
 }
 
-static void
-process_packet (GamiManager *mgr, GHashTable *packet)
+static gboolean
+process_packets (GamiManager *mgr)
 {
     GamiManagerPrivate *priv;
+    GHashTable         *packet;
     gchar              *action_id;
 
-    g_assert (packet != NULL);
-
     priv = GAMI_MANAGER_PRIVATE (mgr);
+
+    if (! (packet = g_queue_pop_head (priv->buffer)))
+		return FALSE;
 
     action_id = g_hash_table_lookup (packet, "ActionID");
     if (action_id || g_hash_table_lookup (packet, "Response")) {
@@ -5052,6 +5040,8 @@ process_packet (GamiManager *mgr, GHashTable *packet)
         }
     } else if (g_hash_table_lookup (packet, "Event"))
         g_signal_emit (mgr, signals [EVENT], 0, packet);
+
+    return ! g_queue_is_empty (priv->buffer);
 }
 
 static void
@@ -5274,6 +5264,7 @@ gami_manager_init (GamiManager *object)
 
     priv = GAMI_MANAGER_PRIVATE (object);
     priv->connected = FALSE;
+    priv->buffer = g_queue_new ();
     priv->action_hooks = g_hash_table_new_full (g_str_hash, g_str_equal,
                                                 g_free, g_free);
 }
@@ -5285,16 +5276,23 @@ gami_manager_finalize (GObject *object)
 
     priv = GAMI_MANAGER_PRIVATE (object);
 
+    while (g_source_remove_by_user_data (object));
+
     if (priv->socket) {
-        while (g_source_remove_by_user_data (object));
         g_io_channel_shutdown (priv->socket, TRUE, NULL);
         g_io_channel_unref (priv->socket);
     }
+
+    g_queue_foreach (priv->buffer, (GFunc) g_hash_table_unref, NULL);
+    g_queue_free (priv->buffer);
+
+    g_hash_table_destroy (priv->action_hooks);
+
     g_free (priv->host);
     g_free (priv->port);
+
     if (GAMI_MANAGER (object)->api_version)
         g_free ((gchar *) GAMI_MANAGER (object)->api_version);
-    g_hash_table_destroy (priv->action_hooks);
 
     G_OBJECT_CLASS (gami_manager_parent_class)->finalize (object);
 }
