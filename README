@@ -11,4 +11,12 @@ MinGW compiler.
 While it aims to fully support the manager API, there is still some funcionality
 missing. Refer to the missing section of the distributed API documentation.
 
+It depends only on glib and gobject of at least version 2.16.
+
+To rebuild the API documentation, you will need gtk-doc (note that gtk-doc is 
+not optional if you plan to use "make dist" to build tarball).
+
+To rebuild the included gobject-introspection metadata, you will need
+gobject-introspection of at least version 0.6.2 as well.
+
 For installation instructions, see the file 'INSTALL'.
