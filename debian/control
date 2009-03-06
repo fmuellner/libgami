@@ -9,7 +9,7 @@ Homepage: http://www.asteriskarena.com/
 Package: libgami-dev
 Section: libdevel
 Architecture: any
-Depends: libgami-0 (= ${binary:Version})
+Depends: libgami0 (= ${binary:Version})
 Description: GObject based interface to the Asterisk manager (development files)
  Libgami is a library that provides a GObject based interface to the manager 
  interface of the Asterisk PBX. It aims at providing a full implementation of 

@@ -1,3 +1,15 @@
+2009-03-05  Florian Müllner <florian.muellner@gmail.com>
+
+	* [r376] README:
+	  Updated documentation
+	* [r375] ., AUTHORS, ChangeLog, Makefile.am, NEWS, README,
+	  autogen.sh, configure.ac, docs, docs/reference/libgami-docs.sgml,
+	  docs/reference/libgami-sections.txt,
+	  docs/reference/libgami.types, libgami-1.0.pc.in, po, src,
+	  src/gami-main.c, src/gami-main.h, src/gami-manager.c,
+	  src/gami-manager.h, src/gami-response.c, src/gami-response.h:
+	  Updated documentation
+
 2009-03-04  Florian Müllner <florian.muellner@gmail.com>
 
 	* [r358] src/gami-manager.c:

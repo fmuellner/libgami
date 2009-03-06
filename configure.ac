@@ -135,6 +135,7 @@ GTK_DOC_CHECK([1.9])
 ##################################################
 
 AC_PATH_PROG(SVN2CL,svn2cl,no)
+enable_svn2cl=no;
 
 if test "$SVN2CL" != "no";
 then
