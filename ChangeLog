@@ -1,3 +1,15 @@
+2009-03-06  Florian Müllner <florian.muellner@gmail.com>
+
+	* [r398] ChangeLog, configure.ac, debian, debian/control:
+	  Fixed debian system
+	* [r382] debian/libgami0.substvars:
+	  Cleaning up debian directory
+	* [r381] debian, debian/changelog, debian/compat, debian/control,
+	  debian/copyright, debian/docs, debian/libgami-dev.install,
+	  debian/libgami-doc.install, debian/libgami0.install,
+	  debian/libgami0.substvars, debian/rules:
+	  Debianized package
+
 2009-03-05  Florian Müllner <florian.muellner@gmail.com>
 
 	* [r376] README:
