@@ -322,13 +322,13 @@ gami_manager_connect (GamiManager *ami, GError **error)
  * @ami: #GamiManager
  * @username: Username to use for authentification
  * @secret: Password to use for authentification
- * @auth_type: AuthType to use for authentification - if set to "md5", @secret
- *             is expected to contain an MD5 hash of the result string of 
- *             gami_manager_challenge() and the user's password
+ * @auth_type: (allow-none): AuthType to use for authentification - if set
+ *             to "md5", @secret is expected to contain an MD5 hash of the
+ *             result string of gami_manager_challenge() and the user's password
  * @events: Flags of type %GamiEventMask, indicating which events should be
  *          received initially. It is possible to modify this setting using the
  *          gami_manager_events() action
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -391,7 +391,7 @@ gami_manager_login (GamiManager *ami, const gchar *username,
 /**
  * gami_manager_logoff:
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -448,9 +448,9 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
 /**
  * gami_manager_get_var:
  * @ami: #GamiManager
- * @channel: (optional) Channel to retrieve variable from
+ * @channel: (allow-none): Channel to retrieve variable from
  * @variable: Name of the variable to retrieve
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -506,10 +506,10 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
 /**
  * gami_manager_set_var:
  * @ami: #GamiManager
- * @channel: (optional) Channel to set variable for
+ * @channel: (allow-none): Channel to set variable for
  * @variable: Name of the variable to set
  * @value: New value for @variable
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -571,7 +571,7 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
  * gami_manager_module_check:
  * @ami: #GamiManager
  * @module: Asterisk module name (not including extension)
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -626,7 +626,7 @@ gami_manager_module_check (GamiManager *ami, const gchar *module,
  * @ami: #GamiManager
  * @module: Asterisk module name (not including extension)
  * @load_type: Load action to perform (load, reload or unload)
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -698,10 +698,10 @@ gami_manager_module_load (GamiManager *ami, const gchar *module,
  * gami_manager_monitor:
  * @ami: #GamiManager
  * @channel: Channel to start monitoring
- * @file: (optional) Filename to use for recording
- * @format: (optional) Format to use for recording
- * @mix: (optional) Whether to mix in / out channel into one file
- * @action_id: (optional) ActionID to ease response matching
+ * @file: (allow-none): Filename to use for recording
+ * @format: (allow-none): Format to use for recording
+ * @mix: (allow-none): Whether to mix in / out channel into one file
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -763,7 +763,7 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
  * @ami: #GamiManager
  * @channel: Monitored channel
  * @file: New filename to use for recording
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -817,7 +817,7 @@ gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
  * gami_manager_stop_monitor:
  * @ami: #GamiManager
  * @channel: Monitored channel
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -870,7 +870,7 @@ gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
  * gami_manager_pause_monitor:
  * @ami: #GamiManager
  * @channel: Monitored channel
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -923,7 +923,7 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
  * gami_manager_unpause_monitor:
  * @ami: #GamiManager
  * @channel: Monitored channel
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -982,7 +982,7 @@ gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
  * @user_num: The user number in the specified bridge
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1037,7 +1037,7 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
  * @user_num: The user number in the specified bridge
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1091,7 +1091,7 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
  * gami_manager_meetme_list:
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1155,7 +1155,7 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
  * @iface: Member interface to add to @queue
  * @penalty: Penalty for new member
  * @paused: whether @iface should be initially paused
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1216,7 +1216,7 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
  * @ami: #GamiManager
  * @queue: Existing queue to remove member from
  * @iface: Member interface to remove from @queue
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1270,10 +1270,10 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
 /**
  * gami_manager_queue_pause:
  * @ami: #GamiManager
- * @queue: (optional) Existing queue for which @iface should be (un)paused
+ * @queue: (allow-none): Existing queue for which @iface should be (un)paused
  * @iface: Member interface (un)pause
  * @paused: Whether to pause or unpause @iface
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1331,10 +1331,10 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
 /**
  * gami_manager_queue_penalty:
  * @ami: #GamiManager
- * @queue: (optional) Limit @penalty change to existing queue
+ * @queue: (allow-none): Limit @penalty change to existing queue
  * @iface: Member interface change penalty for
  * @penalty: New penalty to set for @iface
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1392,8 +1392,8 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
 /**
  * gami_manager_queue_summary:
  * @ami: #GamiManager
- * @queue: (optional) Only send summary information for @queue
- * @action_id: (optional) ActionID to ease response matching
+ * @queue: (allow-none): Only send summary information for @queue
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1450,7 +1450,7 @@ gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
  * @ami: #GamiManager
  * @queue: Queue to generate queue_log entry for
  * @event: Log event to generate
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1598,7 +1598,7 @@ gami_manager_queue_status (GamiManager *ami, const gchar *queue,
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to dial @number
  * @number: The number to dial
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1653,7 +1653,7 @@ gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
  * gami_manager_zap_hangup
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel to hang up
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1706,7 +1706,7 @@ gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
  * gami_manager_zap_dnd_on
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to turn on DND status
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1759,7 +1759,7 @@ gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
  * gami_manager_zap_dnd_off
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to turn off DND status
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1812,7 +1812,7 @@ gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
 /**
  * gami_manager_zap_show_channels
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1864,7 +1864,7 @@ gami_manager_zap_show_channels (GamiManager *ami, const gchar *action_id,
  * gami_manager_zap_transfer
  * @ami: #GamiManager
  * @zap_channel: The channel to be transferred
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1917,7 +1917,7 @@ gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
 /**
  * gami_manager_zap_restart
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1974,7 +1974,7 @@ gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to dial @number
  * @number: The number to dial
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2029,7 +2029,7 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
  * gami_manager_dahdi_hangup
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel to hang up
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2083,7 +2083,7 @@ gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
  * gami_manager_dahdi_dnd_on
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to turn on DND status
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2137,7 +2137,7 @@ gami_manager_dahdi_dnd_on (GamiManager *ami, const gchar *dahdi_channel,
  * gami_manager_dahdi_dnd_off
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to turn off DND status
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2190,8 +2190,8 @@ gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
 /**
  * gami_manager_dahdi_show_channels
  * @ami: #GamiManager
- * @dahdi_channel: (optional) Limit status information to this channel
- * @action_id: (optional) ActionID to ease response matching
+ * @dahdi_channel: (allow-none): Limit status information to this channel
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2247,7 +2247,7 @@ gami_manager_dahdi_show_channels (GamiManager *ami, const gchar *dahdi_channel,
  * gami_manager_dahdi_transfer
  * @ami: #GamiManager
  * @dahdi_channel: The channel to be transferred
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2300,7 +2300,7 @@ gami_manager_dahdi_transfer (GamiManager *ami, const gchar *dahdi_channel,
 /**
  * gami_manager_dahdi_restart
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2355,7 +2355,7 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
 /**
  * gami_manager_agents
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2408,12 +2408,12 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
  * @ami: #GamiManager
  * @agent: The ID of the agent to log in
  * @exten: The extension to use as callback
- * @context: (optional) The context to use as callback
- * @ack_call: (optional) Whether calls should be acknowledged by the agent
+ * @context: (allow-none): The context to use as callback
+ * @ack_call: (allow-none): Whether calls should be acknowledged by the agent
  *            (by pressing #)
- * @wrapup_time: (optional) The minimum amount of time after hangup before the
- *            agent will receive a new call
- * @action_id: (optional) ActionID to ease response matching
+ * @wrapup_time: (allow-none): The minimum amount of time after hangup before
+ *            the agent will receive a new call
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2477,7 +2477,7 @@ gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
  * gami_manager_agent_logoff
  * @ami: #GamiManager
  * @agent: The ID of the agent to log off
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2536,7 +2536,7 @@ gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
  * @ami: #GamiManager
  * @family: The AstDB key family from which to retrieve the value
  * @key: The name of the AstDB key
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2592,7 +2592,7 @@ gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
  * @family: The AstDB key family in which to set the value
  * @key: The name of the AstDB key
  * @val: The value to assign to the key
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2650,7 +2650,7 @@ gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
  * @ami: #GamiManager
  * @family: The AstDB key family in which to delete the key
  * @key: The name of the AstDB key to delete
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2703,7 +2703,7 @@ gami_manager_db_del (GamiManager *ami, const gchar *family, const gchar *key,
  * gami_manager_db_del_tree
  * @ami: #GamiManager
  * @family: The AstDB key family to delete
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2764,8 +2764,8 @@ gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
  * @channel: Channel name to park
  * @channel2: Channel to announce park info to (and return the call to if the
  *            parking times out)
- * @timeout: (optional) Milliseconds to wait before callback
- * @action_id: (optional) ActionID to ease response matching
+ * @timeout: (allow-none): Milliseconds to wait before callback
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2822,7 +2822,7 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
 /**
  * gami_manager_parked_calls
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2878,7 +2878,7 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
 /**
  * gami_manager_voicemail_users_list
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2930,7 +2930,7 @@ gami_manager_voicemail_users_list (GamiManager *ami, const gchar *action_id,
  * gami_manager_mailbox_count
  * @ami: #GamiManager
  * @mailbox: The mailbox to check messages for
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -2983,7 +2983,7 @@ gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
  * gami_manager_mailbox_status
  * @ami: #GamiManager
  * @mailbox: The mailbox to check status for
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3040,7 +3040,7 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
 /**
  * gami_manager_core_status
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3091,7 +3091,7 @@ gami_manager_core_status (GamiManager *ami, const gchar *action_id,
 /**
  * gami_manager_core_show_channels
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3142,7 +3142,7 @@ gami_manager_core_show_channels (GamiManager *ami, const gchar *action_id,
 /**
  * gami_manager_core_settings
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3196,7 +3196,7 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
 /**
  * gami_manager_iax_peer_list
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3247,7 +3247,7 @@ gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
 /**
  * gami_manager_sip_peers
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3299,7 +3299,7 @@ gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
  * gami_manager_sip_show_peer
  * @ami: #GamiManager
  * @peer: SIP peer to get status information for
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3351,7 +3351,7 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
 /**
  * gami_manager_sip_show_registry
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3402,8 +3402,8 @@ gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
 /**
  * gami_manager_status
  * @ami: #GamiManager
- * @channel: (optional) Only retrieve status information for this channel
- * @action_id: (optional) ActionID to ease response matching
+ * @channel: (allow-none): Only retrieve status information for this channel
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3460,7 +3460,7 @@ gami_manager_status (GamiManager *ami, const gchar *channel,
  * @ami: #GamiManager
  * @exten: The name of the extension to check
  * @context: The context of the extension to check
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3515,7 +3515,7 @@ gami_manager_extension_state (GamiManager *ami, const gchar *exten,
 /**
  * gami_manager_ping
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3569,7 +3569,7 @@ gami_manager_ping (GamiManager *ami, const gchar *action_id,
  * @ami: #GamiManager
  * @channel: The name of the channel to set the timeout for
  * @timeout: The maximum duration of the current call, in seconds
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3623,7 +3623,7 @@ gami_manager_absolute_timeout (GamiManager *ami, const gchar *channel,
  * gami_manager_challenge
  * @ami: #GamiManager
  * @auth_type: The authentification type to generate challenge for (e.g. "md5")
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3677,8 +3677,8 @@ gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
  * @ami: #GamiManager
  * @channel: The name of the channel to set @user_field for
  * @user_field: The value for the CDR user field
- * @append: (optional) Whether to append @user_field to current value
- * @action_id: (optional) ActionID to ease response matching
+ * @append: (allow-none): Whether to append @user_field to current value
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3735,9 +3735,9 @@ gami_manager_set_cdr_user_field (GamiManager *ami, const gchar *channel,
 /**
  * gami_manager_reload
  * @ami: #GamiManager
- * @module: (optional) The name of the module to reload (not including
+ * @module: (allow-none): The name of the module to reload (not including
  *           extension)
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3791,7 +3791,7 @@ gami_manager_reload (GamiManager *ami, const gchar *module,
  * gami_manager_hangup
  * @ami: #GamiManager
  * @channel: The name of the channel to hang up
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3844,11 +3844,11 @@ gami_manager_hangup (GamiManager *ami, const gchar *channel,
  * gami_manager_redirect
  * @ami: #GamiManager
  * @channel: The name of the channel redirect
- * @extra_channel: (optional) Second call leg to transfer
+ * @extra_channel: (allow-none): Second call leg to transfer
  * @exten: The extension @channel should be redirected to
  * @context: The context @channel should be redirected to
  * @priority: The priority @channel should be redirected to
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3911,7 +3911,7 @@ gami_manager_redirect (GamiManager *ami, const gchar *channel,
  * @channel1: The name of the channel to bridge to @channel2
  * @channel2: The name of the channel to bridge to @channel1
  * @tone: Whether to play courtesy tone to @channel2
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -3969,8 +3969,8 @@ gami_manager_bridge (GamiManager *ami, const gchar *channel1,
  * @ami: #GamiManager
  * @channel: The name of the channel to execute @command in
  * @command: The name of the AGI command to execute
- * @command_id: (optional) CommandID for matching in AGI notification events
- * @action_id: (optional) ActionID to ease response matching
+ * @command_id: (allow-none): CommandID for matching in AGI notification events
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4029,7 +4029,7 @@ gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
  * @ami: #GamiManager
  * @channel: The name of the channel to send @message to
  * @message: The message to send to @channel
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4086,7 +4086,7 @@ gami_manager_send_text (GamiManager *ami, const gchar *channel,
  * @jabber: Jabber / GTalk account to send message from
  * @screen_name: Jabber / GTalk account to send message to
  * @message: The message to send
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4143,7 +4143,7 @@ gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
  * @ami: #GamiManager
  * @channel: The name of the channel to send @digit to
  * @digit: The DTMF digit to play on @channel
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4199,7 +4199,7 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
 /**
  * gami_manager_list_commands
  * @ami: #GamiManager
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4252,7 +4252,7 @@ gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
  * gami_manager_list_categories
  * @ami: #GamiManager
  * @filename: The name of the configuration file to list categories for
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4306,7 +4306,7 @@ gami_manager_list_categories (GamiManager *ami, const gchar *filename,
  * gami_manager_get_config
  * @ami: #GamiManager
  * @filename: The name of the configuration file to get content for
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4360,7 +4360,7 @@ gami_manager_get_config (GamiManager *ami, const gchar *filename,
  * gami_manager_get_config_json
  * @ami: #GamiManager
  * @filename: The name of the configuration file to get content for
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4414,7 +4414,7 @@ gami_manager_get_config_json (GamiManager *ami, const gchar *filename,
  * gami_manager_create_config
  * @ami: #GamiManager
  * @filename: The name of the configuration file to create
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4474,16 +4474,16 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
  *                     @priority)
  * @data_context: Context to dial or data to pass to application (depending on
  *                @priority)
- * @priority: (optional) Priority to dial - if %NULL, @application_exten will
+ * @priority: (allow-none): Priority to dial - if %NULL, @application_exten will
  *            be interpretated as application and @data_context as data
- * @timeout: (optional) Time to wait for @channel to answer in milliseconds
- * @caller_id: (optional) CallerID to set on the outgoing channel
- * @account: (optional) AccountCode to set for the call
- * @variables: (optional) A #GHashTable with name / value pairs to pass as 
+ * @timeout: (allow-none): Time to wait for @channel to answer in milliseconds
+ * @caller_id: (allow-none): CallerID to set on the outgoing channel
+ * @account: (allow-none): AccountCode to set for the call
+ * @variables: (allow-none): A #GHashTable with name / value pairs to pass as 
  *             channel variables
- * @async: (optional) Whether to originate call asynchronously - this allows
+ * @async: (allow-none): Whether to originate call asynchronously - this allows
  *         to originate further calls before a response is received
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4572,7 +4572,7 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
  * gami_manager_events
  * @ami: #GamiManager
  * @event_mask: #GamiEventMask to set for the connection
- * @action_id: (optional) ActionID to ease response matching
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4632,8 +4632,8 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
  * gami_manager_user_event
  * @ami: #GamiManager
  * @user_event: The user defined event to send
- * @headers: (optional) Optional header to add to the event
- * @action_id: (optional) ActionID to ease response matching
+ * @headers: (allow-none): Optional header to add to the event
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -4697,8 +4697,8 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
 /**
  * gami_manager_wait_event
  * @ami: #GamiManager
- * @timeout: (optional) Maximum time to wait for events in seconds
- * @action_id: (optional) ActionID to ease response matching
+ * @timeout: (allow-none): Maximum time to wait for events in seconds
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
