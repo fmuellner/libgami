@@ -392,6 +392,7 @@ gami_manager_login (GamiManager *ami, const gchar *username,
  *          gami_manager_events() action
  * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
  * @user_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
@@ -452,10 +453,8 @@ gami_manager_login_async (GamiManager *ami, const gchar *username,
  * gami_manager_logoff:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
  * Close the manager session and disconnect from asterisk
@@ -569,15 +568,13 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
 }
 
 /**
- * gami_manager_get_var:
+ * gami_manager_get_var_async:
  * @ami: #GamiManager
  * @channel: (allow-none): Channel to retrieve variable from
  * @variable: Name of the variable to retrieve
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
  * Get value of @variable (either from @channel or as global)
@@ -667,10 +664,8 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
  * @variable: Name of the variable to set
  * @value: New value for @variable
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set @variable (optionally on channel @channel) to @value
@@ -1211,7 +1206,7 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
 }
 
 /**
- * gami_manager_pause_monitor:
+ * gami_manager_pause_monitor_async:
  * @ami: #GamiManager
  * @channel: Monitored channel
  * @action_id: (allow-none): ActionID to ease response matching
@@ -1382,7 +1377,7 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
 }
 
 /**
- * gami_manager_meetme_mute:
+ * gami_manager_meetme_mute_async:
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
  * @user_num: The user number in the specified bridge
@@ -2287,10 +2282,8 @@ gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
  * @zap_channel: The ZAP channel on which to dial @number
  * @number: The number to dial
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
  * Dial over ZAP channel while offhook
@@ -2453,7 +2446,7 @@ gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
 }
 
 /**
- * gami_manager_zap_dnd_on
+ * gami_manager_zap_dnd_on_async:
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to turn on DND status
  * @action_id: (allow-none): ActionID to ease response matching
@@ -4913,10 +4906,8 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
  * @ami: #GamiManager
  * @peer: SIP peer to get status information for
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve status information for @peer

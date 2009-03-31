@@ -33,7 +33,7 @@
     &libgami-Building;
     &libgami-Compiling;
     &libgami-Unimplemented;
-	&libgami-Example;
+    &libgami-Example;
 
   </chapter>
 
@@ -41,6 +41,5 @@
     <title>API reference</title>
     <xi:include href="xml/libgami-main.xml"/>
     <xi:include href="xml/libgami-manager.xml"/>
-    <xi:include href="xml/libgami-response.xml"/>
   </chapter>
 </book>
