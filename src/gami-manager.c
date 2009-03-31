@@ -164,7 +164,8 @@ static void add_action_hook (GamiManager *manager, gchar *action_id,
 static gboolean process_bool_response (GHashTable *packet, gpointer expected);
 static gchar *process_string_response (GHashTable *packet, gpointer return_key);
 static GHashTable *process_hash_response (GHashTable *packet);
-static GSList *process_list_response (GHashTable *packet, gpointer stop_event);
+static gboolean process_list_response (GHashTable *packet,
+                                       gpointer stop_event, GSList **resp);
 
 /* response callbacks used internally in synchronous mode */
 static void set_bool_response   (gboolean response, gboolean *store);
@@ -7389,9 +7390,9 @@ process_packets (GamiManager *mgr)
         if (hook) {
             switch (hook->type) {
                 gboolean    bool_resp;
-                gchar      *str_resp = NULL;
-                GHashTable *hash_resp = NULL;
-                GSList     *list_resp = NULL;
+                gchar      *str_resp;
+                GHashTable *hash_resp;
+                GSList     *list_resp;
 
                 case GAMI_RESPONSE_TYPE_BOOL:
                     bool_resp = process_bool_response (packet,
@@ -7408,9 +7409,9 @@ process_packets (GamiManager *mgr)
                     hook->user_func.hash_func (hash_resp, hook->user_data);
                     break;
                 case GAMI_RESPONSE_TYPE_LIST:
-                    list_resp = process_list_response (packet,
-                                                       hook->handler_data);
-                    if (list_resp)
+                    list_resp = NULL;
+                    if (process_list_response (packet, hook->handler_data,
+                                               &list_resp))
                         hook->user_func.list_func (list_resp, hook->user_data);
                     break;
             }
@@ -7519,8 +7520,8 @@ process_hash_response (GHashTable *packet)
     return g_hash_table_ref (packet);
 }
 
-static GSList *
-process_list_response (GHashTable *packet, gpointer stop_event)
+static gboolean
+process_list_response (GHashTable *packet, gpointer stop_event, GSList **resp)
 {
     static GSList *list = NULL;
     gchar         *event;
@@ -7534,19 +7535,18 @@ process_list_response (GHashTable *packet, gpointer stop_event)
         }
 
         if (! check_response (packet, "Success"))
-            return NULL;   /* FIXME: errors, empty/incomplete lists */
+            return TRUE;   /* FIXME: errors, empty lists */
 
-        return NULL;
+        return FALSE;
     }
 
     event = g_hash_table_lookup (packet, "Event");
     if (! strcmp (event, (gchar *) stop_event)) {
-        GSList *resp;
 
-        resp = g_slist_reverse (list);
+        *resp = g_slist_reverse (list);
         list = NULL;
 
-        return resp;
+        return TRUE;
 
     } else {
         if (event)
@@ -7555,7 +7555,7 @@ process_list_response (GHashTable *packet, gpointer stop_event)
         list = g_slist_prepend (list, g_hash_table_ref (packet));
     }
 
-    return NULL; /* list not complete, wait for more packets */
+    return FALSE; /* list not complete, wait for more packets */
 }
 
 static void
