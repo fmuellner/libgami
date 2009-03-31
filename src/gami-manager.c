@@ -7488,7 +7488,8 @@ add_action_hook (GamiManager *mgr, gchar *action_id, GamiActionHook *hook)
     priv = GAMI_MANAGER_PRIVATE (mgr);
         
     g_hash_table_insert (priv->action_hooks, action_id, hook);
-    g_hash_table_insert (priv->action_hooks, g_strdup ("current"), hook);
+    g_hash_table_insert (priv->action_hooks, g_strdup ("current"),
+                         g_memdup (hook, sizeof (GamiActionHook)));
 }
 
 static gboolean
