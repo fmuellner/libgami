@@ -28,8 +28,6 @@
 #include <glib.h>
 #include <glib-object.h>
 
-#include "gami-response.h"
-
 G_BEGIN_DECLS
 
 /**
@@ -204,14 +202,40 @@ struct _GamiManagerClass
 
 
 /**
- * GamiResponseFunc:
- * @response: the action's #GamiResponse.
- * @user_data: user data passed to the action
+ * GamiBoolResponseFunc:
+ * @response: the action's response
+ * @user_data: user data passed when registering the callback
  *
- * Specifies the type of functions passed as callback to manager actions
- */
-typedef void (*GamiResponseFunc) (GamiResponse *response,
-								  gpointer user_data);
+ * Specifies the type of functions passed as callback to boolean manager actions
+ **/
+typedef void (*GamiBoolResponseFunc) (gboolean response, gpointer user_data);
+
+/**
+ * GamiStringResponseFunc:
+ * @response: the action's response
+ * @user_data: user data passed when registering the callback
+ *
+ * Specifies the type of functions passed as callback to string manager actions
+ **/
+typedef void (*GamiStringResponseFunc) (gchar *response, gpointer user_data);
+
+/**
+ * GamiHashResponseFunc:
+ * @response: the action's response
+ * @user_data: user data passed when registering the callback
+ *
+ * Specifies the type of functions passed as callback to hash manager actions
+ **/
+typedef void (*GamiHashResponseFunc) (GHashTable *response, gpointer user_data);
+
+/**
+ * GamiListResponseFunc:
+ * @response: the action's response
+ * @user_data: user data passed when registering the callback
+ *
+ * Specifies the type of functions passed as callback to list manager actions
+ **/
+typedef void (*GamiListResponseFunc) (GSList *response, gpointer user_data);
 
 /**
  * GamiManagerNewAsyncFunc:
@@ -237,115 +261,184 @@ void         gami_manager_new_async (const gchar *host, const gchar *port,
 									 gpointer user_data);
 gboolean     gami_manager_connect (GamiManager *ami, GError **error);
 
-GamiResponse *gami_manager_login  (GamiManager *ami, const gchar *username,
-								   const gchar *secret, const gchar *auth_type,
-								   GamiEventMask events, const gchar *action_id,
-								   GamiResponseFunc response_func,
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_logoff (GamiManager *ami, const gchar *action_id, 
-								   GamiResponseFunc response_func,
-								   gpointer response_data, GError **error);
+gboolean gami_manager_login  (GamiManager *ami, const gchar *username,
+                              const gchar *secret, const gchar *auth_type,
+                              GamiEventMask events, const gchar *action_id,
+                              GError **error);
+GIOStatus gami_manager_login_async (GamiManager *ami,
+                                    const gchar *username, const gchar *secret,
+                                    const gchar *auth_type,
+                                    GamiEventMask events,
+                                    const gchar *action_id,
+                                    GamiBoolResponseFunc response_func,
+                                    gpointer response_data, GError **error);
 
-GamiResponse *gami_manager_get_var (GamiManager *ami, const gchar *channel,
-									const gchar *variable,
-									const gchar *action_id,
-									GamiResponseFunc response_func,
-									gpointer response_data, GError **error); 
-GamiResponse *gami_manager_set_var (GamiManager *ami, const gchar *channel,
-									const gchar *variable, const gchar *value,
-									const gchar *action_id,
-									GamiResponseFunc response_func,
-									gpointer response_data, GError **error);
+gboolean gami_manager_logoff (GamiManager *ami, const gchar *action_id, 
+                              GError **error);
+GIOStatus gami_manager_logoff_async (GamiManager *ami, const gchar *action_id, 
+                                     GamiBoolResponseFunc response_func,
+                                     gpointer response_data, GError **error);
 
-GamiResponse *gami_manager_module_check (GamiManager *ami, const gchar *module,
-										 const gchar *action_id,
-										 GamiResponseFunc response_func,
-										 gpointer response_data,
-										 GError **error);
-GamiResponse *gami_manager_module_load (GamiManager *ami, const gchar *module,
-										GamiModuleLoadType load_type,
-										const gchar *action_id,
-										GamiResponseFunc response_func,
-										gpointer response_data, GError **error);
+gchar *gami_manager_get_var (GamiManager *ami, const gchar *channel,
+                             const gchar *variable, const gchar *action_id,
+                             GError **error); 
+GIOStatus gami_manager_get_var_async (GamiManager *ami, const gchar *channel,
+                                      const gchar *variable,
+                                      const gchar *action_id,
+                                      GamiStringResponseFunc response_func,
+                                      gpointer response_data, GError **error); 
 
-GamiResponse *gami_manager_monitor (GamiManager *ami, const gchar *channel,
-									const gchar *file, const gchar *format,
-									gboolean mix, const gchar *action_id,
-									GamiResponseFunc response_func,
-									gpointer response_data, GError **error);
-GamiResponse *gami_manager_change_monitor (GamiManager *ami,
-										   const gchar *channel,
-										   const gchar *file,
-										   const gchar *action_id,
-										   GamiResponseFunc response_func,
-										   gpointer response_data,
-										   GError **error);
-GamiResponse *gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
-										 const gchar *action_id,
-										 GamiResponseFunc response_func,
-										 gpointer response_data,
-										 GError **error);
-GamiResponse *gami_manager_pause_monitor (GamiManager *ami,
-										  const gchar *channel,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_unpause_monitor (GamiManager *ami,
-											const gchar *channel,
-											const gchar *action_id,
-											GamiResponseFunc response_func,
-											gpointer response_data,
-											GError **error);
+gboolean gami_manager_set_var (GamiManager *ami, const gchar *channel,
+                               const gchar *variable, const gchar *value,
+                               const gchar *action_id, GError **error);
+GIOStatus gami_manager_set_var_async (GamiManager *ami, const gchar *channel,
+                                      const gchar *variable, const gchar *value,
+                                      const gchar *action_id,
+                                      GamiBoolResponseFunc response_func,
+                                      gpointer response_data, GError **error);
 
-GamiResponse *gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
-										const gchar *user_num,
-										const gchar *action_id,
-										GamiResponseFunc response_func,
-										gpointer response_data, GError **error);
-GamiResponse *gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
-										  const gchar *user_num,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
-										const gchar *action_id,
-										GamiResponseFunc response_func,
-										gpointer response_data, GError **error);
+gboolean gami_manager_module_check (GamiManager *ami, const gchar *module,
+                                    const gchar *action_id, GError **error);
+GIOStatus gami_manager_module_check_async (GamiManager *ami,
+                                           const gchar *module,
+                                           const gchar *action_id,
+                                           GamiBoolResponseFunc response_func,
+                                           gpointer response_data,
+                                           GError **error);
+gboolean gami_manager_module_load (GamiManager *ami, const gchar *module,
+                                   GamiModuleLoadType load_type,
+                                   const gchar *action_id, GError **error);
+GIOStatus gami_manager_module_load_async (GamiManager *ami, const gchar *module,
+                                          GamiModuleLoadType load_type,
+                                          const gchar *action_id,
+                                          GamiBoolResponseFunc response_func,
+                                          gpointer response_data,
+                                          GError **error);
 
-GamiResponse *gami_manager_queue_add (GamiManager *ami, const gchar *queue,
-									  const gchar *iface, guint penalty,
-									  gboolean paused, const gchar *action_id,
-									  GamiResponseFunc response_func,
-									  gpointer response_data, GError **error);
-GamiResponse *gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
-										 const gchar *iface,
-										 const gchar *action_id,
-										 GamiResponseFunc response_func,
-										 gpointer response_data,
-										 GError **error);
-GamiResponse *gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
-										const gchar *iface, gboolean paused,
-										const gchar *action_id,
-										GamiResponseFunc response_func,
-										gpointer response_data, GError **error);
-GamiResponse *gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
-										  const gchar *iface, guint penalty,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_queue_log (GamiManager *ami, const gchar *queue,
-									  const gchar *event,
-									  const gchar *action_id,
-									  GamiResponseFunc response_func,
-									  gpointer response_data, GError **error);
+gboolean gami_manager_monitor (GamiManager *ami, const gchar *channel,
+                               const gchar *file, const gchar *format,
+                               gboolean mix, const gchar *action_id,
+                               GError **error);
+GIOStatus gami_manager_monitor_async (GamiManager *ami, const gchar *channel,
+                                      const gchar *file, const gchar *format,
+                                      gboolean mix, const gchar *action_id,
+                                      GamiBoolResponseFunc response_func,
+                                      gpointer response_data, GError **error);
+gboolean gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
+                                      const gchar *file, const gchar *action_id,
+                                      GError **error);
+GIOStatus gami_manager_change_monitor_async (GamiManager *ami,
+                                             const gchar *channel,
+                                             const gchar *file,
+                                             const gchar *action_id,
+                                             GamiBoolResponseFunc response_func,
+                                             gpointer response_data,
+                                             GError **error);
+gboolean gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
+                                    const gchar *action_id, GError **error);
+GIOStatus gami_manager_stop_monitor_async (GamiManager *ami,
+                                           const gchar *channel,
+                                           const gchar *action_id,
+                                           GamiBoolResponseFunc response_func,
+                                           gpointer response_data,
+                                           GError **error);
+gboolean gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
+                                     const gchar *action_id, GError **error);
+GIOStatus gami_manager_pause_monitor_async (GamiManager *ami,
+                                            const gchar *channel,
+                                            const gchar *action_id,
+                                            GamiBoolResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+gboolean gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
+                                       const gchar *action_id, GError **error);
+GIOStatus gami_manager_unpause_monitor_async (GamiManager *ami,
+                                              const gchar *channel,
+                                              const gchar *action_id,
+                                              GamiBoolResponseFunc resp_func,
+                                              gpointer resp_data,
+                                              GError **error);
+
+gboolean gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
+                                   const gchar *user_num,
+                                   const gchar *action_id, GError **error);
+GIOStatus gami_manager_meetme_mute_async (GamiManager *ami, const gchar *meetme,
+                                          const gchar *user_num,
+                                          const gchar *action_id,
+                                          GamiBoolResponseFunc response_func,
+                                          gpointer response_data,
+                                          GError **error);
+gboolean gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
+                                     const gchar *user_num,
+                                     const gchar *action_id, GError **error);
+GIOStatus gami_manager_meetme_unmute_async (GamiManager *ami,
+                                            const gchar *meetme,
+                                            const gchar *user_num,
+                                            const gchar *action_id,
+                                            GamiBoolResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+GSList *gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
+                                  const gchar *action_id, GError **error);
+GIOStatus gami_manager_meetme_list_async (GamiManager *ami, const gchar *meetme,
+                                          const gchar *action_id,
+                                          GamiListResponseFunc response_func,
+                                          gpointer response_data,
+                                          GError **error);
+
+gboolean gami_manager_queue_add (GamiManager *ami, const gchar *queue,
+                                 const gchar *iface, guint penalty,
+                                 gboolean paused, const gchar *action_id,
+                                 GError **error);
+GIOStatus gami_manager_queue_add_async (GamiManager *ami, const gchar *queue,
+                                        const gchar *iface, guint penalty,
+                                        gboolean paused, const gchar *action_id,
+                                        GamiBoolResponseFunc response_func,
+                                        gpointer response_data, GError **error);
+gboolean gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
+                                    const gchar *iface, const gchar *action_id,
+                                    GError **error);
+GIOStatus gami_manager_queue_remove_async (GamiManager *ami, const gchar *queue,
+                                           const gchar *iface,
+                                           const gchar *action_id,
+                                           GamiBoolResponseFunc response_func,
+                                           gpointer response_data,
+                                           GError **error);
+gboolean gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
+                                   const gchar *iface, gboolean paused,
+                                   const gchar *action_id, GError **error);
+GIOStatus gami_manager_queue_pause_async (GamiManager *ami, const gchar *queue,
+                                          const gchar *iface, gboolean paused,
+                                          const gchar *action_id,
+                                          GamiBoolResponseFunc response_func,
+                                          gpointer response_data,
+                                          GError **error);
+gboolean gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
+                                     const gchar *iface, guint penalty,
+                                     const gchar *action_id, GError **error);
+GIOStatus gami_manager_queue_penalty_async (GamiManager *ami,
+                                            const gchar *queue,
+                                            const gchar *iface, guint penalty,
+                                            const gchar *action_id,
+                                            GamiBoolResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+GSList *gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
+                                    const gchar *action_id, GError **error);
+GIOStatus gami_manager_queue_summary_async (GamiManager *ami,
+                                            const gchar *queue,
+                                            const gchar *action_id,
+                                            GamiListResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+gboolean gami_manager_queue_log (GamiManager *ami, const gchar *queue,
+                                 const gchar *event, const gchar *action_id,
+                                 GError **error);
+GIOStatus gami_manager_queue_log_async (GamiManager *ami, const gchar *queue,
+                                        const gchar *event,
+                                        const gchar *action_id,
+                                        GamiBoolResponseFunc response_func,
+                                        gpointer response_data, GError **error);
 /*
    GamiResponse *gami_manager_queue_status (GamiManager *ami, const gchar *queue,
    const gchar *action_id,
@@ -354,312 +447,486 @@ GamiResponse *gami_manager_queue_log (GamiManager *ami, const gchar *queue,
    GError **error);
    */
 
-GamiResponse *gami_manager_zap_dial_offhook (GamiManager *ami,
-											 const gchar *zap_channel,
-											 const gchar *number,
-											 const gchar *action_id,
-											 GamiResponseFunc response_func,
-											 gpointer response_data,
-											 GError **error);
-GamiResponse *gami_manager_zap_hangup (GamiManager *ami,
-									   const gchar *zap_channel,
-									   const gchar *action_id,
-									   GamiResponseFunc response_func,
-									   gpointer response_data, GError **error);
-GamiResponse *gami_manager_zap_dnd_on (GamiManager *ami,
-									   const gchar *zap_channel,
-									   const gchar *action_id,
-									   GamiResponseFunc response_func,
-									   gpointer response_data, GError **error);
-GamiResponse *gami_manager_zap_dnd_off (GamiManager *ami,
-										const gchar *zap_channel,
-										const gchar *action_id,
-										GamiResponseFunc response_func,
-										gpointer response_data, GError **error);
-GamiResponse *gami_manager_zap_show_channels (GamiManager *ami,
-											  const gchar *action_id,
-											  GamiResponseFunc response_func,
-											  gpointer response_data,
-											  GError **error);
-GamiResponse *gami_manager_zap_transfer (GamiManager *ami,
-										 const gchar *zap_channel,
-										 const gchar *action_id,
-										 GamiResponseFunc response_func,
-										 gpointer response_data,
-										 GError **error);
-GamiResponse *gami_manager_zap_restart (GamiManager *ami,
-										const gchar *action_id,
-										GamiResponseFunc response_func,
-										gpointer response_data, GError **error);
+gboolean gami_manager_zap_dial_offhook (GamiManager *ami,
+                                        const gchar *zap_channel,
+                                        const gchar *number,
+                                        const gchar *action_id, GError **error);
+GIOStatus gami_manager_zap_dial_offhook_async (GamiManager *ami,
+                                               const gchar *zap_channel,
+                                               const gchar *number,
+                                               const gchar *action_id,
+                                               GamiBoolResponseFunc resp_func,
+                                               gpointer resp_data,
+                                               GError **error);
+gboolean gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
+                                  const gchar *action_id, GError **error);
+GIOStatus gami_manager_zap_hangup_async (GamiManager *ami,
+                                         const gchar *zap_channel,
+                                         const gchar *action_id,
+                                         GamiBoolResponseFunc response_func,
+                                         gpointer response_data,
+                                         GError **error);
+gboolean gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
+                                  const gchar *action_id, GError **error);
+GIOStatus gami_manager_zap_dnd_on_async (GamiManager *ami,
+                                         const gchar *zap_channel,
+                                         const gchar *action_id,
+                                         GamiBoolResponseFunc response_func,
+                                         gpointer response_data,
+                                         GError **error);
+gboolean gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
+                                   const gchar *action_id, GError **error);
+GIOStatus gami_manager_zap_dnd_off_async (GamiManager *ami,
+                                          const gchar *zap_channel,
+                                          const gchar *action_id,
+                                          GamiBoolResponseFunc response_func,
+                                          gpointer response_data,
+                                          GError **error);
+GSList *gami_manager_zap_show_channels (GamiManager *ami,
+                                        const gchar *action_id, GError **error);
+GIOStatus gami_manager_zap_show_channels_async (GamiManager *ami,
+                                                const gchar *action_id,
+                                                GamiListResponseFunc resp_func,
+                                                gpointer resp_data,
+                                                GError **error);
+gboolean gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
+                                    const gchar *action_id, GError **error);
+GIOStatus gami_manager_zap_transfer_async (GamiManager *ami,
+                                           const gchar *zap_channel,
+                                           const gchar *action_id,
+                                           GamiBoolResponseFunc response_func,
+                                           gpointer response_data,
+                                           GError **error);
+gboolean gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
+                                   GError **error);
+GIOStatus gami_manager_zap_restart_async (GamiManager *ami,
+                                          const gchar *action_id,
+                                          GamiBoolResponseFunc response_func,
+                                          gpointer response_data,
+                                          GError **error);
 
-GamiResponse *gami_manager_dahdi_dial_offhook (GamiManager *ami,
-											   const gchar *dahdi_channel,
-											   const gchar *number,
-											   const gchar *action_id,
-											   GamiResponseFunc response_func,
-											   gpointer response_data,
-											   GError **error);
-GamiResponse *gami_manager_dahdi_hangup (GamiManager *ami,
-										 const gchar *dahdi_channel,
-										 const gchar *action_id,
-										 GamiResponseFunc response_func,
-										 gpointer response_data,
-										 GError **error);
-GamiResponse *gami_manager_dahdi_dnd_on (GamiManager *ami,
-										 const gchar *dahdi_channel,
-										 const gchar *action_id,
-										 GamiResponseFunc response_func,
-										 gpointer response_data,
-										 GError **error);
-GamiResponse *gami_manager_dahdi_dnd_off (GamiManager *ami,
-										  const gchar *dahdi_channel,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_dahdi_show_channels (GamiManager *ami,
-												const gchar *dahdi_channel,
-												const gchar *action_id,
-												GamiResponseFunc response_func,
-												gpointer response_data,
-												GError **error);
-GamiResponse *gami_manager_dahdi_transfer (GamiManager *ami,
-										   const gchar *dahdi_channel,
-										   const gchar *action_id,
-										   GamiResponseFunc response_func,
-										   gpointer response_data,
-										   GError **error);
-GamiResponse *gami_manager_dahdi_restart (GamiManager *ami,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
+gboolean gami_manager_dahdi_dial_offhook (GamiManager *ami,
+                                          const gchar *dahdi_channel,
+                                          const gchar *number,
+                                          const gchar *action_id,
+                                          GError **error);
+GIOStatus gami_manager_dahdi_dial_offhook_async (GamiManager *ami,
+                                                 const gchar *dahdi_channel,
+                                                 const gchar *number,
+                                                 const gchar *action_id,
+                                                 GamiBoolResponseFunc resp_func,
+                                                 gpointer resp_data,
+                                                 GError **error);
+gboolean gami_manager_dahdi_hangup (GamiManager *ami,
+                                    const gchar *dahdi_channel,
+                                    const gchar *action_id, GError **error);
+GIOStatus gami_manager_dahdi_hangup_async (GamiManager *ami,
+                                           const gchar *dahdi_channel,
+                                           const gchar *action_id,
+                                           GamiBoolResponseFunc response_func,
+                                           gpointer response_data,
+                                           GError **error);
+gboolean gami_manager_dahdi_dnd_on (GamiManager *ami,
+                                    const gchar *dahdi_channel,
+                                    const gchar *action_id, GError **error);
+GIOStatus gami_manager_dahdi_dnd_on_async (GamiManager *ami,
+                                           const gchar *dahdi_channel,
+                                           const gchar *action_id,
+                                           GamiBoolResponseFunc response_func,
+                                           gpointer response_data,
+                                           GError **error);
+gboolean gami_manager_dahdi_dnd_off (GamiManager *ami,
+                                     const gchar *dahdi_channel,
+                                     const gchar *action_id, GError **error);
+GIOStatus gami_manager_dahdi_dnd_off_async (GamiManager *ami,
+                                            const gchar *dahdi_channel,
+                                            const gchar *action_id,
+                                            GamiBoolResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+GSList *gami_manager_dahdi_show_channels (GamiManager *ami,
+                                          const gchar *dahdi_channel,
+                                          const gchar *action_id,
+                                          GError **error);
+GIOStatus gami_manager_dahdi_show_channels_async (GamiManager *ami,
+                                                  const gchar *dahdi_channel,
+                                                  const gchar *action_id,
+                                                  GamiListResponseFunc res_func,
+                                                  gpointer res_data,
+                                                  GError **error);
+gboolean gami_manager_dahdi_transfer (GamiManager *ami,
+                                      const gchar *dahdi_channel,
+                                      const gchar *action_id, GError **error);
+GIOStatus gami_manager_dahdi_transfer_async (GamiManager *ami,
+                                             const gchar *dahdi_channel,
+                                             const gchar *action_id,
+                                             GamiBoolResponseFunc response_func,
+                                             gpointer response_data,
+                                             GError **error);
+gboolean gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
+                                     GError **error);
+GIOStatus gami_manager_dahdi_restart_async (GamiManager *ami,
+                                            const gchar *action_id,
+                                            GamiBoolResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
 
-GamiResponse *gami_manager_agents (GamiManager *ami, const gchar *action_id,
-								   GamiResponseFunc response_func,
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_agent_callback_login (GamiManager *ami,
-												 const gchar *agent,
-												 const gchar *exten,
-												 const gchar *context,
-												 gboolean ack_call,
-												 guint wrapup_time,
-												 const gchar *action_id,
-												 GamiResponseFunc response_func,
-												 gpointer response_data,
-												 GError **error);
-GamiResponse *gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
-										 const gchar *action_id,
-										 GamiResponseFunc response_func,
-										 gpointer response_data,
-										 GError **error);
+GSList *gami_manager_agents (GamiManager *ami, const gchar *action_id,
+                             GError **error);
+GIOStatus gami_manager_agents_async (GamiManager *ami, const gchar *action_id,
+                                     GamiListResponseFunc response_func,
+                                     gpointer response_data, GError **error);
+gboolean gami_manager_agent_callback_login (GamiManager *ami,
+                                            const gchar *agent,
+                                            const gchar *exten,
+                                            const gchar *context,
+                                            gboolean ack_call,
+                                            guint wrapup_time,
+                                            const gchar *action_id,
+                                            GError **error);
+GIOStatus gami_manager_agent_callback_login_async (GamiManager *ami,
+                                                   const gchar *agent,
+                                                   const gchar *exten,
+                                                   const gchar *context,
+                                                   gboolean ack_call,
+                                                   guint wrapup_time,
+                                                   const gchar *action_id,
+                                                   GamiBoolResponseFunc func,
+                                                   gpointer response_data,
+                                                   GError **error);
+gboolean gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
+                                    const gchar *action_id, GError **error);
+GIOStatus gami_manager_agent_logoff_async (GamiManager *ami, const gchar *agent,
+                                           const gchar *action_id,
+                                           GamiBoolResponseFunc response_func,
+                                           gpointer response_data,
+                                           GError **error);
 
-GamiResponse *gami_manager_db_get (GamiManager *ami, const gchar *family,
-								   const gchar *key, const gchar *action_id,
-								   GamiResponseFunc response_func,
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_db_put (GamiManager *ami, const gchar *family,
-								   const gchar *key, const gchar *val,
-								   const gchar *action_id,
-								   GamiResponseFunc response_func, 
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_db_del (GamiManager *ami, const gchar *family,
-								   const gchar *key, const gchar *action_id,
-								   GamiResponseFunc response_func,
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
-										const gchar *action_id,
-										GamiResponseFunc response_func,
-										gpointer response_data, GError **error);
+gchar *gami_manager_db_get (GamiManager *ami, const gchar *family,
+                            const gchar *key, const gchar *action_id,
+                            GError **error);
+GIOStatus gami_manager_db_get_async (GamiManager *ami, const gchar *family,
+                                     const gchar *key, const gchar *action_id,
+                                     GamiStringResponseFunc response_func,
+                                     gpointer response_data, GError **error);
+gboolean gami_manager_db_put (GamiManager *ami, const gchar *family,
+                              const gchar *key, const gchar *val,
+                              const gchar *action_id, GError **error);
+GIOStatus gami_manager_db_put_async (GamiManager *ami, const gchar *family,
+                                     const gchar *key, const gchar *val,
+                                     const gchar *action_id,
+                                     GamiBoolResponseFunc response_func, 
+                                     gpointer response_data, GError **error);
+gboolean gami_manager_db_del (GamiManager *ami, const gchar *family,
+                              const gchar *key, const gchar *action_id,
+                              GError **error);
+GIOStatus gami_manager_db_del_async (GamiManager *ami, const gchar *family,
+                                     const gchar *key, const gchar *action_id,
+                                     GamiBoolResponseFunc response_func,
+                                     gpointer response_data, GError **error);
+gboolean gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
+                                   const gchar *action_id, GError **error);
+GIOStatus gami_manager_db_del_tree_async (GamiManager *ami, const gchar *family,
+                                          const gchar *action_id,
+                                          GamiBoolResponseFunc response_func,
+                                          gpointer response_data,
+                                          GError **error);
 
-GamiResponse *gami_manager_park (GamiManager *ami, const gchar *channel,
-								 const gchar *channel2, guint timeout,
-								 const gchar *action_id,
-								 GamiResponseFunc response_func,
-								 gpointer response_data, GError **error);
-GamiResponse *gami_manager_parked_calls (GamiManager *ami,
-										 const gchar *action_id,
-										 GamiResponseFunc response_func,
-										 gpointer response_data,
-										 GError **error);
+gboolean gami_manager_park (GamiManager *ami, const gchar *channel,
+                            const gchar *channel2, guint timeout,
+                            const gchar *action_id, GError **error);
+GIOStatus gami_manager_park_async (GamiManager *ami, const gchar *channel,
+                                   const gchar *channel2, guint timeout,
+                                   const gchar *action_id,
+                                   GamiBoolResponseFunc response_func,
+                                   gpointer response_data, GError **error);
+GSList *gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
+                                   GError **error);
+GIOStatus gami_manager_parked_calls_async (GamiManager *ami,
+                                           const gchar *action_id,
+                                           GamiListResponseFunc response_func,
+                                           gpointer response_data,
+                                           GError **error);
 
-GamiResponse *gami_manager_voicemail_users_list (GamiManager *ami,
-												 const gchar *action_id,
-												 GamiResponseFunc response_func,
-												 gpointer response_data,
-												 GError **error);
-GamiResponse *gami_manager_mailbox_count (GamiManager *ami,
-										  const gchar *mailbox,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_mailbox_status (GamiManager *ami,
-										   const gchar *mailbox,
-										   const gchar *action_id,
-										   GamiResponseFunc response_func,
-										   gpointer response_data,
-										   GError **error);
+GSList *gami_manager_voicemail_users_list (GamiManager *ami,
+                                           const gchar *action_id,
+                                           GError **error);
+GIOStatus gami_manager_voicemail_users_list_async (GamiManager *ami,
+                                                   const gchar *action_id,
+                                                   GamiListResponseFunc func,
+                                                   gpointer response_data,
+                                                   GError **error);
+GHashTable *gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
+                                        const gchar *action_id, GError **error);
+GIOStatus gami_manager_mailbox_count_async (GamiManager *ami,
+                                            const gchar *mailbox,
+                                            const gchar *action_id,
+                                            GamiHashResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+GHashTable *gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
+                                         const gchar *action_id,
+                                         GError **error);
+GIOStatus gami_manager_mailbox_status_async (GamiManager *ami,
+                                             const gchar *mailbox,
+                                             const gchar *action_id,
+                                             GamiHashResponseFunc response_func,
+                                             gpointer response_data,
+                                             GError **error);
 
-GamiResponse *gami_manager_core_status (GamiManager *ami,
-										const gchar *action_id,
-										GamiResponseFunc response_func,
-										gpointer response_data,
-										GError **error);
-GamiResponse *gami_manager_core_show_channels (GamiManager *ami,
-											   const gchar *action_id,
-											   GamiResponseFunc response_func,
-											   gpointer response_data,
-											   GError **error);
-GamiResponse *gami_manager_core_settings (GamiManager *ami,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
+GHashTable *gami_manager_core_status (GamiManager *ami, const gchar *action_id,
+                                      GError **error);
+GIOStatus gami_manager_core_status_async (GamiManager *ami,
+                                          const gchar *action_id,
+                                          GamiHashResponseFunc response_func,
+                                          gpointer response_data,
+                                          GError **error);
+GSList *gami_manager_core_show_channels (GamiManager *ami,
+                                         const gchar *action_id,
+                                         GError **error);
+GIOStatus gami_manager_core_show_channels_async (GamiManager *ami,
+                                                 const gchar *action_id,
+                                                 GamiListResponseFunc resp_func,
+                                                 gpointer response_data,
+                                                 GError **error);
+GHashTable *gami_manager_core_settings (GamiManager *ami,
+                                        const gchar *action_id, GError **error);
+GIOStatus gami_manager_core_settings_async (GamiManager *ami,
+                                            const gchar *action_id,
+                                            GamiHashResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
 
-GamiResponse *gami_manager_iax_peer_list (GamiManager *ami,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
-									  GamiResponseFunc response_func,
-									  gpointer response_data, GError **error);
-GamiResponse *gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_sip_show_registry (GamiManager *ami,
-											  const gchar *action_id,
-											  GamiResponseFunc response_func,
-											  gpointer response_data,
-											  GError **error);
+GSList *gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
+                                    GError **error);
+GIOStatus gami_manager_iax_peer_list_async (GamiManager *ami,
+                                            const gchar *action_id,
+                                            GamiListResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+GSList *gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
+                                GError **error);
+GIOStatus gami_manager_sip_peers_async (GamiManager *ami,
+                                        const gchar *action_id,
+                                        GamiListResponseFunc response_func,
+                                        gpointer response_data, GError **error);
+GHashTable *gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
+                                        const gchar *action_id, GError **error);
+GIOStatus gami_manager_sip_show_peer_async (GamiManager *ami, const gchar *peer,
+                                            const gchar *action_id,
+                                            GamiHashResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+GSList *gami_manager_sip_show_registry (GamiManager *ami,
+                                        const gchar *action_id, GError **error);
+GIOStatus gami_manager_sip_show_registry_async (GamiManager *ami,
+                                                const gchar *action_id,
+                                                GamiListResponseFunc resp_func,
+                                                gpointer response_data,
+                                                GError **error);
 
-GamiResponse *gami_manager_status (GamiManager *ami, const gchar *channel,
-								   const gchar *action_id,
-								   GamiResponseFunc response_func,
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_extension_state (GamiManager *ami,
-											const gchar *exten,
-											const gchar *context,
-											const gchar *action_id,
-											GamiResponseFunc response_func,
-											gpointer response_data,
-											GError **error);
-GamiResponse *gami_manager_ping (GamiManager *ami, const gchar *action_id,
-								 GamiResponseFunc response_func,
-								 gpointer response_data, GError **error);
-GamiResponse *gami_manager_absolute_timeout (GamiManager *ami,
-											 const gchar *channel, gint timeout,
-											 const gchar *action_id,
-											 GamiResponseFunc response_func,
-											 gpointer response_data,
-											 GError **error);
-GamiResponse *gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
-									  const gchar *action_id,
-									  GamiResponseFunc response_func,
-									  gpointer response_data, GError **error);
-GamiResponse *gami_manager_set_cdr_user_field (GamiManager *ami,
-											   const gchar *channel,
-											   const gchar *user_field,
-											   gboolean append,
-											   const gchar *action_id,
-											   GamiResponseFunc response_func, 
-											   gpointer response_data,
-											   GError **error);
-GamiResponse *gami_manager_reload (GamiManager *ami, const gchar *module,
-								   const gchar *action_id,
-								   GamiResponseFunc response_func,
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_hangup (GamiManager *ami, const gchar *channel,
-								   const gchar *action_id,
-								   GamiResponseFunc response_func, 
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_redirect (GamiManager *ami, const gchar *channel,
-									 const gchar *extra_channel,
-									 const gchar *exten, const gchar *context,
-									 const gchar *priority,
-									 const gchar *action_id,
-									 GamiResponseFunc response_func,
-									 gpointer response_data, GError **error);
-GamiResponse *gami_manager_bridge (GamiManager *ami, const gchar *channel1,
-								   const gchar *channel2, gboolean tone,
-								   const gchar *action_id,
-								   GamiResponseFunc response_func,
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_agi (GamiManager *ami, const gchar *channel,
-								const gchar *command, const gchar *command_id,
-								const gchar *action_id,
-								GamiResponseFunc response_func,
-								gpointer response_data, GError **error);
-GamiResponse *gami_manager_send_text (GamiManager *ami, const gchar *channel,
-									  const gchar *message,
-									  const gchar *action_id,
-									  GamiResponseFunc response_func,
-									  gpointer response_data, GError **error);
-GamiResponse *gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
-										const gchar *screen_name,
-										const gchar *message,
-										const gchar *action_id,
-										GamiResponseFunc response_func,
-										gpointer response_data, GError **error);
-GamiResponse *gami_manager_play_dtmf (GamiManager *ami, const gchar *channel,
-									  gchar digit, const gchar *action_id,
-									  GamiResponseFunc response_func,
-									  gpointer response_data, GError **error);
-GamiResponse *gami_manager_list_commands (GamiManager *ami,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_list_categories (GamiManager *ami,
-											const gchar *filename,
-											const gchar *action_id,
-											GamiResponseFunc response_func,
-											gpointer response_data,
-											GError **error);
-GamiResponse *gami_manager_get_config (GamiManager *ami, const gchar *filename,
-									   const gchar *action_id,
-									   GamiResponseFunc response_func,
-									   gpointer response_data, GError **error);
-GamiResponse *gami_manager_get_config_json (GamiManager *ami,
-											const gchar *filename,
-											const gchar *action_id,
-											GamiResponseFunc response_func,
-											gpointer response_data,
-											GError **error);
-GamiResponse *gami_manager_create_config (GamiManager *ami,
-										  const gchar *filename,
-										  const gchar *action_id,
-										  GamiResponseFunc response_func,
-										  gpointer response_data,
-										  GError **error);
-GamiResponse *gami_manager_originate (GamiManager *ami, const gchar *channel,
-									  const gchar *application_exten,
-									  const gchar *data_context,
-									  const gchar *priority, guint timeout,
-									  const gchar *caller_id,
-									  const gchar *account,
-									  const GHashTable *variables,
-									  gboolean async,
-									  const gchar *action_id,
-									  GamiResponseFunc response_func,
-									  gpointer response_data, GError **error);
-GamiResponse *gami_manager_events (GamiManager *ami, GamiEventMask event_mask,
-								   const gchar *action_id,
-								   GamiResponseFunc response_func,
-								   gpointer response_data, GError **error);
-GamiResponse *gami_manager_user_event (GamiManager *ami,
-									   const gchar *user_event,
-									   const GHashTable *headers,
-									   const gchar *action_id,
-									   GamiResponseFunc response_func,
-									   gpointer response_data, GError **error);
-GamiResponse *gami_manager_wait_event (GamiManager *ami, guint timeout,
-									   const gchar *action_id,
-									   GamiResponseFunc response_func,
-									   gpointer response_data, GError **error);
+GSList *gami_manager_status (GamiManager *ami, const gchar *channel,
+                             const gchar *action_id, GError **error);
+GIOStatus gami_manager_status_async (GamiManager *ami, const gchar *channel,
+                                     const gchar *action_id,
+                                     GamiListResponseFunc response_func,
+                                     gpointer response_data, GError **error);
+GHashTable *gami_manager_extension_state (GamiManager *ami, const gchar *exten,
+                                          const gchar *context,
+                                          const gchar *action_id,
+                                          GError **error);
+GIOStatus gami_manager_extension_state_async (GamiManager *ami,
+                                              const gchar *exten,
+                                              const gchar *context,
+                                              const gchar *action_id,
+                                              GamiHashResponseFunc resp_func,
+                                              gpointer resp_data,
+                                              GError **error);
+gboolean gami_manager_ping (GamiManager *ami, const gchar *action_id,
+                            GError **error);
+GIOStatus gami_manager_ping_async (GamiManager *ami, const gchar *action_id,
+                                   GamiBoolResponseFunc response_func,
+                                   gpointer response_data, GError **error);
+gboolean gami_manager_absolute_timeout (GamiManager *ami,
+                                        const gchar *channel, gint timeout,
+                                        const gchar *action_id, GError **error);
+GIOStatus gami_manager_absolute_timeout_async (GamiManager *ami,
+                                               const gchar *channel,
+                                               gint timeout,
+                                               const gchar *action_id,
+                                               GamiBoolResponseFunc resp_func,
+                                               gpointer resp_data,
+                                               GError **error);
+gchar *gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
+                               const gchar *action_id, GError **error);
+GIOStatus gami_manager_challenge_async (GamiManager *ami,
+                                        const gchar *auth_type,
+                                        const gchar *action_id,
+                                        GamiStringResponseFunc response_func,
+                                        gpointer response_data, GError **error);
+gboolean gami_manager_set_cdr_user_field (GamiManager *ami,
+                                          const gchar *channel,
+                                          const gchar *user_field,
+                                          gboolean append,
+                                          const gchar *action_id,
+                                          GError **error);
+GIOStatus gami_manager_set_cdr_user_field_async (GamiManager *ami,
+                                                 const gchar *channel,
+                                                 const gchar *user_field,
+                                                 gboolean append,
+                                                 const gchar *action_id,
+                                                 GamiBoolResponseFunc resp_func,
+                                                 gpointer response_data,
+                                                 GError **error);
+gboolean gami_manager_reload (GamiManager *ami, const gchar *module,
+                              const gchar *action_id, GError **error);
+GIOStatus gami_manager_reload_async (GamiManager *ami, const gchar *module,
+                                     const gchar *action_id,
+                                     GamiBoolResponseFunc response_func,
+                                     gpointer response_data, GError **error);
+gboolean gami_manager_hangup (GamiManager *ami, const gchar *channel,
+                              const gchar *action_id, GError **error);
+GIOStatus gami_manager_hangup_async (GamiManager *ami, const gchar *channel,
+                                     const gchar *action_id,
+                                     GamiBoolResponseFunc response_func, 
+                                     gpointer response_data, GError **error);
+gboolean gami_manager_redirect (GamiManager *ami, const gchar *channel,
+                                const gchar *extra_channel,
+                                const gchar *exten, const gchar *context,
+                                const gchar *priority, const gchar *action_id,
+                                GError **error);
+GIOStatus gami_manager_redirect_async (GamiManager *ami, const gchar *channel,
+                                       const gchar *extra_channel,
+                                       const gchar *exten, const gchar *context,
+                                       const gchar *priority,
+                                       const gchar *action_id,
+                                       GamiBoolResponseFunc response_func,
+                                       gpointer response_data, GError **error);
+gboolean gami_manager_bridge (GamiManager *ami, const gchar *channel1,
+                              const gchar *channel2, gboolean tone,
+                              const gchar *action_id, GError **error);
+GIOStatus gami_manager_bridge_async (GamiManager *ami, const gchar *channel1,
+                               const gchar *channel2, gboolean tone,
+                               const gchar *action_id,
+                               GamiBoolResponseFunc response_func,
+                               gpointer response_data, GError **error);
+gboolean gami_manager_agi (GamiManager *ami, const gchar *channel,
+                           const gchar *command, const gchar *command_id,
+                           const gchar *action_id, GError **error);
+GIOStatus gami_manager_agi_async (GamiManager *ami, const gchar *channel,
+                                  const gchar *command, const gchar *command_id,
+                                  const gchar *action_id,
+                                  GamiBoolResponseFunc response_func,
+                                  gpointer response_data, GError **error);
+gboolean gami_manager_send_text (GamiManager *ami, const gchar *channel,
+                                 const gchar *message, const gchar *action_id,
+                                 GError **error);
+GIOStatus gami_manager_send_text_async (GamiManager *ami, const gchar *channel,
+                                        const gchar *message,
+                                        const gchar *action_id,
+                                        GamiBoolResponseFunc response_func,
+                                        gpointer response_data, GError **error);
+gboolean gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
+                                   const gchar *screen_name,
+                                   const gchar *message, const gchar *action_id,
+                                   GError **error);
+GIOStatus gami_manager_jabber_send_async (GamiManager *ami, const gchar *jabber,
+                                          const gchar *screen_name,
+                                          const gchar *message,
+                                          const gchar *action_id,
+                                          GamiBoolResponseFunc response_func,
+                                          gpointer response_data,
+                                          GError **error);
+gboolean gami_manager_play_dtmf (GamiManager *ami, const gchar *channel,
+                                 gchar digit, const gchar *action_id,
+                                 GError **error);
+GIOStatus gami_manager_play_dtmf_async (GamiManager *ami, const gchar *channel,
+                                        gchar digit, const gchar *action_id,
+                                        GamiBoolResponseFunc response_func,
+                                        gpointer response_data, GError **error);
+GHashTable *gami_manager_list_commands (GamiManager *ami,
+                                        const gchar *action_id, GError **error);
+GIOStatus gami_manager_list_commands_async (GamiManager *ami,
+                                            const gchar *action_id,
+                                            GamiHashResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+GHashTable *gami_manager_list_categories (GamiManager *ami,
+                                          const gchar *filename,
+                                          const gchar *action_id,
+                                          GError **error);
+GIOStatus gami_manager_list_categories_async (GamiManager *ami,
+                                              const gchar *filename,
+                                              const gchar *action_id,
+                                              GamiHashResponseFunc resp_func,
+                                              gpointer resp_data,
+                                              GError **error);
+GHashTable *gami_manager_get_config (GamiManager *ami, const gchar *filename,
+                                     const gchar *action_id, GError **error);
+GIOStatus gami_manager_get_config_async (GamiManager *ami,
+                                         const gchar *filename,
+                                         const gchar *action_id,
+                                         GamiHashResponseFunc response_func,
+                                         gpointer response_data,
+                                         GError **error);
+GHashTable *gami_manager_get_config_json (GamiManager *ami,
+                                          const gchar *filename,
+                                          const gchar *action_id,
+                                          GError **error);
+GIOStatus gami_manager_get_config_json_async (GamiManager *ami,
+                                              const gchar *filename,
+                                              const gchar *action_id,
+                                              GamiHashResponseFunc resp_func,
+                                              gpointer resp_data,
+                                              GError **error);
+gboolean gami_manager_create_config (GamiManager *ami, const gchar *filename,
+                                     const gchar *action_id, GError **error);
+GIOStatus gami_manager_create_config_async (GamiManager *ami,
+                                            const gchar *filename,
+                                            const gchar *action_id,
+                                            GamiBoolResponseFunc response_func,
+                                            gpointer response_data,
+                                            GError **error);
+gboolean gami_manager_originate (GamiManager *ami, const gchar *channel,
+                                 const gchar *application_exten,
+                                 const gchar *data_context,
+                                 const gchar *priority, guint timeout,
+                                 const gchar *caller_id, const gchar *account,
+                                 const GHashTable *variables, gboolean async,
+                                 const gchar *action_id, GError **error);
+GIOStatus gami_manager_originate_async (GamiManager *ami, const gchar *channel,
+                                        const gchar *application_exten,
+                                        const gchar *data_context,
+                                        const gchar *priority, guint timeout,
+                                        const gchar *caller_id,
+                                        const gchar *account,
+                                        const GHashTable *variables,
+                                        gboolean async, const gchar *action_id,
+                                        GamiBoolResponseFunc response_func,
+                                        gpointer response_data, GError **error);
+gboolean gami_manager_events (GamiManager *ami, GamiEventMask event_mask,
+                              const gchar *action_id, GError **error);
+GIOStatus gami_manager_events_async (GamiManager *ami, GamiEventMask event_mask,
+                                     const gchar *action_id,
+                                     GamiBoolResponseFunc response_func,
+                                     gpointer response_data, GError **error);
+gboolean gami_manager_user_event (GamiManager *ami, const gchar *user_event,
+                                  const GHashTable *headers,
+                                  const gchar *action_id, GError **error);
+GIOStatus gami_manager_user_event_async (GamiManager *ami,
+                                         const gchar *user_event,
+                                         const GHashTable *headers,
+                                         const gchar *action_id,
+                                         GamiBoolResponseFunc response_func,
+                                         gpointer response_data,
+                                         GError **error);
+gboolean gami_manager_wait_event (GamiManager *ami, guint timeout,
+                                  const gchar *action_id, GError **error);
+GIOStatus gami_manager_wait_event_async (GamiManager *ami, guint timeout,
+                                         const gchar *action_id,
+                                         GamiBoolResponseFunc response_func,
+                                         gpointer response_data,
+                                         GError **error);
 
 G_END_DECLS
 

@@ -65,28 +65,43 @@
  * on GObject. It supports both synchronious and asynchronious operation 
  * and integrates well with glib's signal / callback system.
  *
- * Each manager action returns an #GamiResponse and takes at least four 
- * parameters common to each action: An optional ActionID as supported by the
- * underlying asterisk API, a callback function for asynchronious operation,
- * optional user data to pass to said function and an optional #GError to
- * report underlying network errors. If used asynchroniously, the response will
- * contain a boolean value indicating whether the action request was send
- * successfully. Otherwise, the action response will be returned directly.
+ * Each manager action has both a synchronous and an asynchronous version.
+ * Actions return either a #gboolean, a string (#gchar *), a #GHashTable or a
+ * #GSList. The synchronous function returns these directly, while the 
+ * asynchronous version takes a callback parameter, which will be called with 
+ * the return value once the action has finished, along the user_data pointer
+ * which may be passed to asynchronous actions to access your application's
+ * objects.
+ * All functions support an optional ActionID as supported by the underlying
+ * Asterisk Manager API. Note that an ActionID will be randomly assigned if
+ * not provided as a parameter.
+ * Errors are reported via an optional #GError parameter.
  * 
  * Asynchronious callbacks and events require the use of #GMainLoop (or derived
  * implementations as gtk_main().
  */
 
-typedef GamiResponse *(*GamiResponseHandlerFunc) (GHashTable *, gpointer);
+typedef enum {
+    GAMI_RESPONSE_TYPE_BOOL,
+    GAMI_RESPONSE_TYPE_STRING,
+    GAMI_RESPONSE_TYPE_HASH,
+    GAMI_RESPONSE_TYPE_LIST
+} GamiResponseType;
 
 typedef struct _GamiActionHook GamiActionHook;
 struct _GamiActionHook
 {
-    GamiResponseHandlerFunc handler_func;
-    gpointer                handler_data;
+    GamiResponseType type;
 
-    GamiResponseFunc        user_func;
-    gpointer                user_data;
+    union {
+        GamiBoolResponseFunc   bool_func;
+        GamiStringResponseFunc string_func;
+        GamiHashResponseFunc   hash_func;
+        GamiListResponseFunc   list_func;
+    } user_func;
+
+    gpointer  handler_data;
+    gpointer  user_data;
 };
 
 typedef struct _GamiManagerPrivate GamiManagerPrivate;
@@ -98,7 +113,6 @@ struct _GamiManagerPrivate
     gchar *port;
 
     GHashTable *action_hooks;
-    GamiResponse *sync_response;
     GQueue *buffer;
 };
 
@@ -144,24 +158,32 @@ static gboolean dispatch_ami (GIOChannel *chan,
                               GamiManager *ami);
 static gboolean process_packets (GamiManager *manager);
 static void add_action_hook (GamiManager *manager, gchar *action_id,
-                             GamiResponseHandlerFunc handler_func,
-                             gpointer handler_data,
-                             GamiResponseFunc user_func,
-                             gpointer user_data);
+                             GamiActionHook *hook);
 
-/* return action response, blocks for synchronous responses */
-static GamiResponse *action_response (GamiManager *ami, GIOStatus status,
-                                      const gchar *action_id, GError **error);
+/* internal response functions to feed callbacks */
+static gboolean process_bool_response (GHashTable *packet, gpointer expected);
+static gchar *process_string_response (GHashTable *packet, gpointer return_key);
+static GHashTable *process_hash_response (GHashTable *packet);
+static GSList *process_list_response (GHashTable *packet, gpointer stop_event);
 
-/* response functions to feed callbacks */
-static GamiResponse *process_bool_response (GHashTable *packet,
-                                            gpointer expected);
-static GamiResponse *process_string_response (GHashTable *packet,
-                                              gpointer return_key);
-static GamiResponse *process_hash_response (GHashTable *packet,
-                                            gpointer unused);
-static GamiResponse *process_list_response (GHashTable *packet,
-                                            gpointer stop_event);
+/* response callbacks used internally in synchronous mode */
+static void set_bool_response   (gboolean response, gboolean *store);
+static void set_string_response (gchar *response, gchar **store);
+static void set_hash_response   (GHashTable *response, GHashTable **store);
+static void set_list_response   (GSList *response, GSList **store);
+
+/* initialize action hooks */
+static GamiActionHook *bool_action_hook_new (GamiBoolResponseFunc user_func,
+                                             gpointer user_data,
+                                             gpointer handler_data);
+static GamiActionHook *string_action_hook_new (GamiStringResponseFunc user_func,
+                                               gpointer user_data,
+                                               gpointer handler_data);
+static GamiActionHook *hash_action_hook_new (GamiHashResponseFunc user_func,
+                                             gpointer user_data);
+static GamiActionHook *list_action_hook_new (GamiListResponseFunc user_func,
+                                             gpointer user_data,
+                                             gpointer handler_data);
 
 /* various helper funcs */
 static gboolean check_response (GHashTable *p, const gchar *expected_value);
@@ -329,22 +351,60 @@ gami_manager_connect (GamiManager *ami, GError **error)
  *          received initially. It is possible to modify this setting using the
  *          gami_manager_events() action
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Authenticate to asterisk and open a new manager session
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_login (GamiManager *ami, const gchar *username,
                     const gchar *secret, const gchar *auth_type,
                     GamiEventMask events, const gchar *action_id,
-                    GamiResponseFunc response_func, gpointer response_data,
                     GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_login_async (ami, username, secret, auth_type,
+                                         events, action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_login_async:
+ * @ami: #GamiManager
+ * @username: Username to use for authentification
+ * @secret: Password to use for authentification
+ * @auth_type: (allow-none): AuthType to use for authentification - if set
+ *             to "md5", @secret is expected to contain an MD5 hash of the
+ *             result string of gami_manager_challenge() and the user's password
+ * @events: Flags of type %GamiEventMask, indicating which events should be
+ *          received initially. It is possible to modify this setting using the
+ *          gami_manager_events() action
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @user_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Authenticate to asterisk and open a new manager session
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_login_async (GamiManager *ami, const gchar *username,
+                          const gchar *secret, const gchar *auth_type,
+                          GamiEventMask events, const gchar *action_id,
+                          GamiBoolResponseFunc response_func,
+                          gpointer user_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString  *action;
@@ -374,8 +434,8 @@ gami_manager_login (GamiManager *ami, const gchar *username,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, user_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -385,7 +445,7 @@ gami_manager_login (GamiManager *ami, const gchar *username,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -402,10 +462,40 @@ gami_manager_login (GamiManager *ami, const gchar *username,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
-gami_manager_logoff (GamiManager *ami, const gchar *action_id,
-                     GamiResponseFunc response_func, gpointer response_data,
-                     GError **error)
+gboolean
+gami_manager_logoff (GamiManager *ami, const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_logoff_async (ami, action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_logoff_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Close the manager session and disconnect from asterisk
+ *
+ * Returns: #GIOStatus of the send operation
+ */
+GIOStatus
+gami_manager_logoff_async (GamiManager *ami, const gchar *action_id,
+                           GamiBoolResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -424,10 +514,10 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response,
-                     (ami->api_major && ami->api_minor) ? "Success"
-                                                        : "Goodbye",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           (ami->api_major
+                                            && ami->api_minor) ? "Success"
+                                                               : "Goodbye"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -437,13 +527,46 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
 /*
  *  Get/Set Variables
  */
+
+/**
+ * gami_manager_get_var:
+ * @ami: #GamiManager
+ * @channel: (allow-none): Channel to retrieve variable from
+ * @variable: Name of the variable to retrieve
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Get value of @variable (either from @channel or as global)
+ *
+ * Returns: value of @variable or %NULL
+ */
+gchar *
+gami_manager_get_var (GamiManager *ami, const gchar *channel,
+                      const gchar *variable, const gchar *action_id,
+                      GError **error)
+{
+    gchar *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiStringResponseFunc func = (GamiStringResponseFunc) set_string_response;
+    iostatus = gami_manager_get_var_async (ami, channel, variable, action_id,
+                                           func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return NULL;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
 
 /**
  * gami_manager_get_var:
@@ -459,13 +582,13 @@ gami_manager_logoff (GamiManager *ami, const gchar *action_id,
  *
  * Get value of @variable (either from @channel or as global)
  *
- * Returns: value of @variable or %FALSE
+ * Returns: #GIOStatus of the send operation
  */
-GamiResponse *
-gami_manager_get_var (GamiManager *ami, const gchar *channel,
-                      const gchar *variable, const gchar *action_id,
-                      GamiResponseFunc response_func, gpointer response_data,
-                      GError **error)
+GIOStatus
+gami_manager_get_var_async (GamiManager *ami, const gchar *channel,
+                            const gchar *variable, const gchar *action_id,
+                            GamiStringResponseFunc response_func,
+                            gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -489,8 +612,8 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_string_response, "Value",
-                     response_func, response_data);
+                     string_action_hook_new (response_func, response_data,
+                                             "Value"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -500,11 +623,45 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
  * gami_manager_set_var:
+ * @ami: #GamiManager
+ * @channel: (allow-none): Channel to set variable for
+ * @variable: Name of the variable to set
+ * @value: New value for @variable
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Set @variable (optionally on channel @channel) to @value
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+gboolean
+gami_manager_set_var (GamiManager *ami, const gchar *channel,
+                      const gchar *variable, const gchar *value,
+                      const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_set_var_async (ami, channel, variable, value,
+                                           action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_set_var_async:
  * @ami: #GamiManager
  * @channel: (allow-none): Channel to set variable for
  * @variable: Name of the variable to set
@@ -520,11 +677,12 @@ gami_manager_get_var (GamiManager *ami, const gchar *channel,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
-gami_manager_set_var (GamiManager *ami, const gchar *channel,
-                      const gchar *variable, const gchar *value,
-                      const gchar *action_id, GamiResponseFunc response_func,
-                      gpointer response_data, GError **error)
+GIOStatus
+gami_manager_set_var_async (GamiManager *ami, const gchar *channel,
+                            const gchar *variable, const gchar *value,
+                            const gchar *action_id,
+                            GamiBoolResponseFunc response_func,
+                            gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -547,8 +705,8 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\n\n", action_id_new);
 
     g_string_append_printf (action, "Variable: %s\r\nValue: %s\r\n\r\n",
@@ -559,7 +717,7 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -572,21 +730,50 @@ gami_manager_set_var (GamiManager *ami, const gchar *channel,
  * @ami: #GamiManager
  * @module: Asterisk module name (not including extension)
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Check whether @module is loaded
  *
  * Returns: %TRUE if @module is loaded, %FALSE otherwise
  */
-GamiResponse *
+gboolean
 gami_manager_module_check (GamiManager *ami, const gchar *module,
-                           const gchar *action_id,
-                           GamiResponseFunc response_func,
-                           gpointer response_data, GError **error)
+                           const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_module_check_async (ami, module, action_id,
+                                                func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_module_check_async:
+ * @ami: #GamiManager
+ * @module: Asterisk module name (not including extension)
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Check whether @module is loaded
+ *
+ * Returns: %TRUE if @module is loaded, %FALSE otherwise
+ */
+GIOStatus
+gami_manager_module_check_async (GamiManager *ami, const gchar *module,
+                                 const gchar *action_id,
+                                 GamiBoolResponseFunc response_func,
+                                 gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -607,8 +794,8 @@ gami_manager_module_check (GamiManager *ami, const gchar *module,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -618,7 +805,7 @@ gami_manager_module_check (GamiManager *ami, const gchar *module,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -627,21 +814,53 @@ gami_manager_module_check (GamiManager *ami, const gchar *module,
  * @module: Asterisk module name (not including extension)
  * @load_type: Load action to perform (load, reload or unload)
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Perform action indicated by @load_type for @module
  *
  * Returns: %TRUE if @module is loaded, %FALSE otherwise
  */
-GamiResponse *
+gboolean
 gami_manager_module_load (GamiManager *ami, const gchar *module,
                           GamiModuleLoadType load_type, const gchar *action_id,
-                          GamiResponseFunc response_func,
-                          gpointer response_data, GError **error)
+                          GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_module_load_async (ami, module, load_type,
+                                               action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_module_load_async:
+ * @ami: #GamiManager
+ * @module: Asterisk module name (not including extension)
+ * @load_type: Load action to perform (load, reload or unload)
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Perform action indicated by @load_type for @module
+ *
+ * Returns: %TRUE if @module is loaded, %FALSE otherwise
+ */
+GIOStatus
+gami_manager_module_load_async (GamiManager *ami, const gchar *module,
+                                GamiModuleLoadType load_type,
+                                const gchar *action_id,
+                                GamiBoolResponseFunc response_func,
+                                gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -663,8 +882,8 @@ gami_manager_module_load (GamiManager *ami, const gchar *module,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     switch (load_type) {
@@ -686,7 +905,7 @@ gami_manager_module_load (GamiManager *ami, const gchar *module,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -702,21 +921,55 @@ gami_manager_module_load (GamiManager *ami, const gchar *module,
  * @format: (allow-none): Format to use for recording
  * @mix: (allow-none): Whether to mix in / out channel into one file
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Start monitoring @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
                       const gchar *format, gboolean mix, const gchar *action_id,
-                      GamiResponseFunc response_func, gpointer response_data,
                       GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_monitor_async (ami, channel, file, format, mix,
+                                           action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_monitor_async:
+ * @ami: #GamiManager
+ * @channel: Channel to start monitoring
+ * @file: (allow-none): Filename to use for recording
+ * @format: (allow-none): Format to use for recording
+ * @mix: (allow-none): Whether to mix in / out channel into one file
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Start monitoring @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_monitor_async (GamiManager *ami, const gchar *channel,
+                            const gchar *file, const gchar *format,
+                            gboolean mix, const gchar *action_id,
+                            GamiBoolResponseFunc response_func,
+                            gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -744,8 +997,8 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -755,7 +1008,7 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -764,21 +1017,52 @@ gami_manager_monitor (GamiManager *ami, const gchar *channel, const gchar *file,
  * @channel: Monitored channel
  * @file: New filename to use for recording
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Change the file name of the recording occuring on @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
                              const gchar *file, const gchar *action_id,
-                             GamiResponseFunc response_func,
-                             gpointer response_data, GError **error)
+                             GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_change_monitor_async (ami, channel, file, action_id,
+                                                  func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_change_monitor_async:
+ * @ami: #GamiManager
+ * @channel: Monitored channel
+ * @file: New filename to use for recording
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Change the file name of the recording occuring on @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_change_monitor_async (GamiManager *ami, const gchar *channel,
+                                   const gchar *file, const gchar *action_id,
+                                   GamiBoolResponseFunc response_func,
+                                   gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -798,8 +1082,8 @@ gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\nFile: %s\r\n\r\n",
@@ -810,7 +1094,7 @@ gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -818,21 +1102,50 @@ gami_manager_change_monitor (GamiManager *ami, const gchar *channel,
  * @ami: #GamiManager
  * @channel: Monitored channel
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Stop monitoring @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
-                           const gchar *action_id,
-                           GamiResponseFunc response_func,
-                           gpointer response_data, GError **error)
+                           const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_stop_monitor_async (ami, channel, action_id,
+                                                func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_stop_monitor_async:
+ * @ami: #GamiManager
+ * @channel: Monitored channel
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Stop monitoring @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_stop_monitor_async (GamiManager *ami, const gchar *channel,
+                                 const gchar *action_id,
+                                 GamiBoolResponseFunc response_func,
+                                 gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -852,8 +1165,8 @@ gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
@@ -863,7 +1176,7 @@ gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -871,21 +1184,50 @@ gami_manager_stop_monitor (GamiManager *ami, const gchar *channel,
  * @ami: #GamiManager
  * @channel: Monitored channel
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Pause monitoring of @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
-                            const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_pause_monitor_async (ami, channel, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_pause_monitor:
+ * @ami: #GamiManager
+ * @channel: Monitored channel
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Pause monitoring of @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_pause_monitor_async (GamiManager *ami, const gchar *channel,
+                                  const gchar *action_id,
+                                  GamiBoolResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -905,8 +1247,8 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
@@ -916,7 +1258,7 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -924,21 +1266,50 @@ gami_manager_pause_monitor (GamiManager *ami, const gchar *channel,
  * @ami: #GamiManager
  * @channel: Monitored channel
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Continue monitoring of @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
-                              const gchar *action_id,
-                              GamiResponseFunc response_func, 
-                              gpointer response_data, GError **error)
+                              const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_unpause_monitor_async (ami, channel, action_id,
+                                                   func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_unpause_monitor_async:
+ * @ami: #GamiManager
+ * @channel: Monitored channel
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Continue monitoring of @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_unpause_monitor_async (GamiManager *ami, const gchar *channel,
+                                    const gchar *action_id,
+                                    GamiBoolResponseFunc response_func, 
+                                    gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -958,8 +1329,8 @@ gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
@@ -969,7 +1340,7 @@ gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -983,21 +1354,52 @@ gami_manager_unpause_monitor (GamiManager *ami, const gchar *channel,
  * @meetme: The MeetMe conference bridge number
  * @user_num: The user number in the specified bridge
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Mutes @user_num in conference @meetme
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
                           const gchar *user_num, const gchar *action_id,
-                          GamiResponseFunc response_func,
-                          gpointer response_data, GError **error)
+                          GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_meetme_mute_async (ami, meetme, user_num, action_id,
+                                               func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_meetme_mute:
+ * @ami: #GamiManager
+ * @meetme: The MeetMe conference bridge number
+ * @user_num: The user number in the specified bridge
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Mutes @user_num in conference @meetme
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_meetme_mute_async (GamiManager *ami, const gchar *meetme,
+                                const gchar *user_num, const gchar *action_id,
+                                GamiBoolResponseFunc response_func,
+                                gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1017,8 +1419,8 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Meetme: %s\r\nUserNum: %s\r\n\r\n",
@@ -1029,7 +1431,7 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -1038,21 +1440,52 @@ gami_manager_meetme_mute (GamiManager *ami, const gchar *meetme,
  * @meetme: The MeetMe conference bridge number
  * @user_num: The user number in the specified bridge
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Unmutes @user_num in conference @meetme
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
                             const gchar *user_num, const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_meetme_unmute_async (ami, meetme, user_num,
+                                                 action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_meetme_unmute_async:
+ * @ami: #GamiManager
+ * @meetme: The MeetMe conference bridge number
+ * @user_num: The user number in the specified bridge
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Unmutes @user_num in conference @meetme
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_meetme_unmute_async (GamiManager *ami, const gchar *meetme,
+                                  const gchar *user_num, const gchar *action_id,
+                                  GamiBoolResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1072,8 +1505,8 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Meetme: %s\r\nUserNum: %s\r\n\r\n",
@@ -1084,7 +1517,7 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -1092,10 +1525,6 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * List al users in conference @meetme
@@ -1103,11 +1532,45 @@ gami_manager_meetme_unmute (GamiManager *ami, const gchar *meetme,
  * Returns: #GSList of user information (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
-                          const gchar *action_id,
-                          GamiResponseFunc response_func,
-                          gpointer response_data, GError **error)
+                          const gchar *action_id, GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_meetme_list_async (ami, meetme, action_id,
+                                               func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return NULL;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_meetme_list_async:
+ * @ami: #GamiManager
+ * @meetme: The MeetMe conference bridge number
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * List al users in conference @meetme
+ *
+ * Returns: #GSList of user information (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_meetme_list_async (GamiManager *ami, const gchar *meetme,
+                                const gchar *action_id,
+                                GamiListResponseFunc response_func,
+                                gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1129,8 +1592,8 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_list_response, "MeetMeListComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "MeetMeListComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1140,7 +1603,7 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -1156,21 +1619,56 @@ gami_manager_meetme_list (GamiManager *ami, const gchar *meetme,
  * @penalty: Penalty for new member
  * @paused: whether @iface should be initially paused
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Add @iface to @queue
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_queue_add (GamiManager *ami, const gchar *queue,
                         const gchar *iface, guint penalty, gboolean paused,
-                        const gchar *action_id, GamiResponseFunc response_func,
-                        gpointer response_data, GError **error)
+                        const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_queue_add_async (ami, queue, iface, penalty,
+                                             paused, action_id, func, &rv,
+                                             error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_queue_add_async:
+ * @ami: #GamiManager
+ * @queue: Existing queue to add member
+ * @iface: Member interface to add to @queue
+ * @penalty: Penalty for new member
+ * @paused: whether @iface should be initially paused
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Add @iface to @queue
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_queue_add_async (GamiManager *ami, const gchar *queue,
+                              const gchar *iface, guint penalty,
+                              gboolean paused, const gchar *action_id,
+                              GamiBoolResponseFunc response_func,
+                              gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1197,8 +1695,8 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1208,7 +1706,7 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -1217,21 +1715,52 @@ gami_manager_queue_add (GamiManager *ami, const gchar *queue,
  * @queue: Existing queue to remove member from
  * @iface: Member interface to remove from @queue
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Remove @iface from @queue
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
                            const gchar *iface, const gchar *action_id,
-                           GamiResponseFunc response_func,
-                           gpointer response_data, GError **error)
+                           GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_queue_remove_async (ami, queue, iface, action_id,
+                                                func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_queue_remove_async:
+ * @ami: #GamiManager
+ * @queue: Existing queue to remove member from
+ * @iface: Member interface to remove from @queue
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Remove @iface from @queue
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_queue_remove_async (GamiManager *ami, const gchar *queue,
+                                 const gchar *iface, const gchar *action_id,
+                                 GamiBoolResponseFunc response_func,
+                                 gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1253,8 +1782,8 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1264,7 +1793,7 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -1274,22 +1803,54 @@ gami_manager_queue_remove (GamiManager *ami, const gchar *queue,
  * @iface: Member interface (un)pause
  * @paused: Whether to pause or unpause @iface
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * (Un)pause @iface
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
                           const gchar *iface, gboolean paused,
-                          const gchar *action_id,
-                          GamiResponseFunc response_func, 
-                          gpointer response_data, GError **error)
+                          const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_queue_pause_async (ami, queue, iface, paused,
+                                               action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_queue_pause_async:
+ * @ami: #GamiManager
+ * @queue: (allow-none): Existing queue for which @iface should be (un)paused
+ * @iface: Member interface (un)pause
+ * @paused: Whether to pause or unpause @iface
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * (Un)pause @iface
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_queue_pause_async (GamiManager *ami, const gchar *queue,
+                                const gchar *iface, gboolean paused,
+                                const gchar *action_id,
+                                GamiBoolResponseFunc response_func, 
+                                gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1314,8 +1875,8 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1325,7 +1886,7 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -1335,22 +1896,54 @@ gami_manager_queue_pause (GamiManager *ami, const gchar *queue,
  * @iface: Member interface change penalty for
  * @penalty: New penalty to set for @iface
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Change the penalty value of @iface
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
                             const gchar *iface, guint penalty,
-                            const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_queue_penalty_async (ami, queue, iface, penalty,
+                                                 action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_queue_penalty_async:
+ * @ami: #GamiManager
+ * @queue: (allow-none): Limit @penalty change to existing queue
+ * @iface: Member interface change penalty for
+ * @penalty: New penalty to set for @iface
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Change the penalty value of @iface
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_queue_penalty_async (GamiManager *ami, const gchar *queue,
+                                  const gchar *iface, guint penalty,
+                                  const gchar *action_id,
+                                  GamiBoolResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1375,8 +1968,8 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1386,7 +1979,7 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -1394,10 +1987,6 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
  * @ami: #GamiManager
  * @queue: (allow-none): Only send summary information for @queue
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Get summary of queue statistics
@@ -1405,11 +1994,45 @@ gami_manager_queue_penalty (GamiManager *ami, const gchar *queue,
  * Returns: #GSList of queue statistics (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
-                            const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            const gchar *action_id, GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_queue_summary_async (ami, queue, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_queue_summary_async:
+ * @ami: #GamiManager
+ * @queue: (allow-none): Only send summary information for @queue
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Get summary of queue statistics
+ *
+ * Returns: #GSList of queue statistics (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_queue_summary_async (GamiManager *ami, const gchar *queue,
+                                  const gchar *action_id,
+                                  GamiListResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1431,8 +2054,8 @@ gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_list_response, "QueueSummaryComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "QueueSummaryComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1442,7 +2065,7 @@ gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
@@ -1451,21 +2074,52 @@ gami_manager_queue_summary (GamiManager *ami, const gchar *queue,
  * @queue: Queue to generate queue_log entry for
  * @event: Log event to generate
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Generate a queue_log entry for @queue
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_queue_log (GamiManager *ami, const gchar *queue,
                         const gchar *event, const gchar *action_id,
-                        GamiResponseFunc response_func, gpointer response_data,
                         GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_queue_log_async (ami, queue, event, action_id,
+                                             func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_queue_log_async:
+ * @ami: #GamiManager
+ * @queue: Queue to generate queue_log entry for
+ * @event: Log event to generate
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Generate a queue_log entry for @queue
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_queue_log_async (GamiManager *ami, const gchar *queue,
+                              const gchar *event, const gchar *action_id,
+                              GamiBoolResponseFunc response_func,
+                              gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1487,8 +2141,8 @@ gami_manager_queue_log (GamiManager *ami, const gchar *queue,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1498,7 +2152,7 @@ gami_manager_queue_log (GamiManager *ami, const gchar *queue,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 #if 0
@@ -1599,6 +2253,40 @@ gami_manager_queue_status (GamiManager *ami, const gchar *queue,
  * @zap_channel: The ZAP channel on which to dial @number
  * @number: The number to dial
  * @action_id: (allow-none): ActionID to ease response matching
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Dial over ZAP channel while offhook
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+gboolean
+gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
+                               const gchar *number, const gchar *action_id,
+                               GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_zap_dial_offhook_async (ami, zap_channel, number,
+                                                    action_id, func, &rv,
+                                                    error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_zap_dial_offhook_async
+ * @ami: #GamiManager
+ * @zap_channel: The ZAP channel on which to dial @number
+ * @number: The number to dial
+ * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation. Passing %NULL will 
  *           trigger synchronious mode
  * @response_data: User data to pass to the callback. If %NULL is passed for 
@@ -1609,11 +2297,12 @@ gami_manager_queue_status (GamiManager *ami, const gchar *queue,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
-gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
-                               const gchar *number, const gchar *action_id,
-                               GamiResponseFunc response_func,
-                               gpointer response_data, GError **error)
+GIOStatus
+gami_manager_zap_dial_offhook_async (GamiManager *ami, const gchar *zap_channel,
+                                     const gchar *number,
+                                     const gchar *action_id,
+                                     GamiBoolResponseFunc response_func,
+                                     gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1635,8 +2324,8 @@ gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1646,27 +2335,57 @@ gami_manager_zap_dial_offhook (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_zap_hangup
+ * gami_manager_zap_hangup:
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel to hang up
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Hangup ZAP channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
-                         const gchar *action_id, GamiResponseFunc response_func,
+                         const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_zap_hangup_async (ami, zap_channel, action_id,
+                                              func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_zap_hangup_async:
+ * @ami: #GamiManager
+ * @zap_channel: The ZAP channel to hang up
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Hangup ZAP channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_zap_hangup_async (GamiManager *ami, const gchar *zap_channel,
+                         const gchar *action_id,
+                         GamiBoolResponseFunc response_func,
                          gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
@@ -1688,8 +2407,8 @@ gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1699,7 +2418,38 @@ gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
+}
+
+/**
+ * gami_manager_zap_dnd_on:
+ * @ami: #GamiManager
+ * @zap_channel: The ZAP channel on which to turn on DND status
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Set DND (Do Not Disturb) status on @zap_channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+gboolean
+gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
+                         const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_zap_dnd_on_async (ami, zap_channel, action_id,
+                                              func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
 }
 
 /**
@@ -1707,20 +2457,19 @@ gami_manager_zap_hangup (GamiManager *ami, const gchar *zap_channel,
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to turn on DND status
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set DND (Do Not Disturb) status on @zap_channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
-gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
-                         const gchar *action_id, GamiResponseFunc response_func,
-                         gpointer response_data, GError **error)
+GIOStatus
+gami_manager_zap_dnd_on_async (GamiManager *ami, const gchar *zap_channel,
+                               const gchar *action_id,
+                               GamiBoolResponseFunc response_func,
+                               gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1741,8 +2490,8 @@ gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1752,29 +2501,58 @@ gami_manager_zap_dnd_on (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_zap_dnd_off
+ * gami_manager_zap_dnd_off:
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to turn off DND status
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set DND (Do Not Disturb) status on @zap_channel to off
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
-                          const gchar *action_id,
-                          GamiResponseFunc response_func,
-                          gpointer response_data, GError **error)
+                          const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_zap_dnd_off_async (ami, zap_channel, action_id,
+                                               func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_zap_dnd_off_async:
+ * @ami: #GamiManager
+ * @zap_channel: The ZAP channel on which to turn off DND status
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Set DND (Do Not Disturb) status on @zap_channel to off
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_zap_dnd_off_async (GamiManager *ami, const gchar *zap_channel,
+                                const gchar *action_id,
+                                GamiBoolResponseFunc response_func,
+                                gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1795,8 +2573,8 @@ gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1806,17 +2584,13 @@ gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_zap_show_channels
+ * gami_manager_zap_show_channels:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Show the status of all ZAP channels
@@ -1824,10 +2598,43 @@ gami_manager_zap_dnd_off (GamiManager *ami, const gchar *zap_channel,
  * Returns: #GSList of ZAP channels (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_zap_show_channels (GamiManager *ami, const gchar *action_id,
-                                GamiResponseFunc response_func,
-                                gpointer response_data, GError **error)
+                                GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_zap_show_channels_async (ami, action_id,
+                                                     func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_zap_show_channels_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Show the status of all ZAP channels
+ *
+ * Returns: #GSList of ZAP channels (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_zap_show_channels_async (GamiManager *ami, const gchar *action_id,
+                                      GamiListResponseFunc response_func,
+                                      gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1846,8 +2653,8 @@ gami_manager_zap_show_channels (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "ZapShowChannelsComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "ZapShowChannelsComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1857,29 +2664,58 @@ gami_manager_zap_show_channels (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_zap_transfer
+ * gami_manager_zap_transfer:
  * @ami: #GamiManager
  * @zap_channel: The channel to be transferred
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Transfer ZAP channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
-                           const gchar *action_id, 
-                           GamiResponseFunc response_func,
-                           gpointer response_data, GError **error)
+                           const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_zap_transfer_async (ami, zap_channel, action_id,
+                                               func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_zap_transfer_async:
+ * @ami: #GamiManager
+ * @zap_channel: The channel to be transferred
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Transfer ZAP channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_zap_transfer_async (GamiManager *ami, const gchar *zap_channel,
+                                 const gchar *action_id, 
+                                 GamiBoolResponseFunc response_func,
+                                 gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1900,8 +2736,8 @@ gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1911,27 +2747,55 @@ gami_manager_zap_transfer (GamiManager *ami, const gchar *zap_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_zap_restart
+ * gami_manager_zap_restart:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Restart ZAP channels. Any active calls will be terminated
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
-                          GamiResponseFunc response_func,
-                          gpointer response_data, GError **error)
+                          GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_zap_restart_async (ami, action_id,
+                                               func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_zap_restart_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Restart ZAP channels. Any active calls will be terminated
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_zap_restart_async (GamiManager *ami, const gchar *action_id,
+                                GamiBoolResponseFunc response_func,
+                                gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -1950,8 +2814,8 @@ gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -1961,7 +2825,7 @@ gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -1970,26 +2834,60 @@ gami_manager_zap_restart (GamiManager *ami, const gchar *action_id,
  */
 
 /**
- * gami_manager_dahdi_dial_offhook
+ * gami_manager_dahdi_dial_offhook:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to dial @number
  * @number: The number to dial
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Dial over DAHDI channel while offhook
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
                                  const gchar *number, const gchar *action_id,
-                                 GamiResponseFunc response_func,
-                                 gpointer response_data, GError **error)
+                                 GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_dahdi_dial_offhook_async (ami, dahdi_channel,
+                                                      number, action_id,
+                                                      func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_dahdi_dial_offhook_async:
+ * @ami: #GamiManager
+ * @dahdi_channel: The DAHDI channel on which to dial @number
+ * @number: The number to dial
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Dial over DAHDI channel while offhook
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_dahdi_dial_offhook_async (GamiManager *ami,
+                                       const gchar *dahdi_channel,
+                                       const gchar *number,
+                                       const gchar *action_id,
+                                       GamiBoolResponseFunc response_func,
+                                       gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2011,8 +2909,8 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2022,29 +2920,58 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_dahdi_hangup
+ * gami_manager_dahdi_hangup:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel to hang up
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Hangup DAHDI channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
-                           const gchar *action_id,
-                           GamiResponseFunc response_func,
-                           gpointer response_data, GError **error)
+                           const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_dahdi_hangup_async (ami, dahdi_channel, action_id,
+                                                func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_dahdi_hangup_async:
+ * @ami: #GamiManager
+ * @dahdi_channel: The DAHDI channel to hang up
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Hangup DAHDI channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_dahdi_hangup_async (GamiManager *ami, const gchar *dahdi_channel,
+                                 const gchar *action_id,
+                                 GamiBoolResponseFunc response_func,
+                                 gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2065,8 +2992,8 @@ gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2076,29 +3003,58 @@ gami_manager_dahdi_hangup (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_dahdi_dnd_on
+ * gami_manager_dahdi_dnd_on:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to turn on DND status
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set DND (Do Not Disturb) status on @dahdi_channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_dahdi_dnd_on (GamiManager *ami, const gchar *dahdi_channel,
-                           const gchar *action_id,
-                           GamiResponseFunc response_func,
-                           gpointer response_data, GError **error)
+                           const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_dahdi_dnd_on_async (ami, dahdi_channel, action_id,
+                                                func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_dahdi_dnd_on_async:
+ * @ami: #GamiManager
+ * @dahdi_channel: The DAHDI channel on which to turn on DND status
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Set DND (Do Not Disturb) status on @dahdi_channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_dahdi_dnd_on_async (GamiManager *ami, const gchar *dahdi_channel,
+                                 const gchar *action_id,
+                                 GamiBoolResponseFunc response_func,
+                                 gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2119,8 +3075,8 @@ gami_manager_dahdi_dnd_on (GamiManager *ami, const gchar *dahdi_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2130,29 +3086,58 @@ gami_manager_dahdi_dnd_on (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_dahdi_dnd_off
+ * gami_manager_dahdi_dnd_off:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to turn off DND status
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set DND (Do Not Disturb) status on @dahdi_channel to off
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
-                            const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_dahdi_dnd_off_async (ami, dahdi_channel, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_dahdi_dnd_off_async:
+ * @ami: #GamiManager
+ * @dahdi_channel: The DAHDI channel on which to turn off DND status
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Set DND (Do Not Disturb) status on @dahdi_channel to off
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_dahdi_dnd_off_async (GamiManager *ami, const gchar *dahdi_channel,
+                                  const gchar *action_id,
+                                  GamiBoolResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2173,8 +3158,8 @@ gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2184,18 +3169,14 @@ gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_dahdi_show_channels
+ * gami_manager_dahdi_show_channels:
  * @ami: #GamiManager
  * @dahdi_channel: (allow-none): Limit status information to this channel
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Show the status of all DAHDI channels
@@ -2203,11 +3184,47 @@ gami_manager_dahdi_dnd_off (GamiManager *ami, const gchar *dahdi_channel,
  * Returns: #GSList of DAHDI channels (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_dahdi_show_channels (GamiManager *ami, const gchar *dahdi_channel,
-                                  const gchar *action_id,
-                                  GamiResponseFunc response_func,
-                                  gpointer response_data, GError **error)
+                                  const gchar *action_id, GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_dahdi_show_channels_async (ami, dahdi_channel,
+                                                       action_id, func, &rv,
+                                                       error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_dahdi_show_channels_async:
+ * @ami: #GamiManager
+ * @dahdi_channel: (allow-none): Limit status information to this channel
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Show the status of all DAHDI channels
+ *
+ * Returns: #GSList of DAHDI channels (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_dahdi_show_channels_async (GamiManager *ami,
+                                        const gchar *dahdi_channel,
+                                        const gchar *action_id,
+                                        GamiListResponseFunc response_func,
+                                        gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2229,8 +3246,8 @@ gami_manager_dahdi_show_channels (GamiManager *ami, const gchar *dahdi_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "DAHDIShowChannelsComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "DAHDIShowChannelsComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2240,29 +3257,58 @@ gami_manager_dahdi_show_channels (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_dahdi_transfer
+ * gami_manager_dahdi_transfer:
  * @ami: #GamiManager
  * @dahdi_channel: The channel to be transferred
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Transfer DAHDI channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_dahdi_transfer (GamiManager *ami, const gchar *dahdi_channel,
-                             const gchar *action_id,
-                             GamiResponseFunc response_func,
-                             gpointer response_data, GError **error)
+                             const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_dahdi_transfer_async (ami, dahdi_channel, action_id,
+                                                  func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_dahdi_transfer_async:
+ * @ami: #GamiManager
+ * @dahdi_channel: The channel to be transferred
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Transfer DAHDI channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_dahdi_transfer_async (GamiManager *ami, const gchar *dahdi_channel,
+                                   const gchar *action_id,
+                                   GamiBoolResponseFunc response_func,
+                                   gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2283,9 +3329,8 @@ gami_manager_dahdi_transfer (GamiManager *ami, const gchar *dahdi_channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
-    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
 
     g_string_append (action, "\r\n");
 
@@ -2294,27 +3339,55 @@ gami_manager_dahdi_transfer (GamiManager *ami, const gchar *dahdi_channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_dahdi_restart
+ * gami_manager_dahdi_restart:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Restart DAHDI channels. Any active calls will be terminated
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_dahdi_restart_async (ami, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_dahdi_restart_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Restart DAHDI channels. Any active calls will be terminated
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_dahdi_restart_async (GamiManager *ami, const gchar *action_id,
+                                  GamiBoolResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2333,8 +3406,8 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2344,7 +3417,7 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -2353,13 +3426,9 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
  */
 
 /**
- * gami_manager_agents
+ * gami_manager_agents:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * List information about all configured agents and their status
@@ -2367,10 +3436,41 @@ gami_manager_dahdi_restart (GamiManager *ami, const gchar *action_id,
  * Returns: #GSList of agents (stored as #GHashTable) on success,
  *           %NULL on failure
  */
-GamiResponse *
-gami_manager_agents (GamiManager *ami, const gchar *action_id, 
-                     GamiResponseFunc response_func, gpointer response_data,
-                     GError **error)
+GSList *
+gami_manager_agents (GamiManager *ami, const gchar *action_id, GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_agents_async (ami, action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_agents_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * List information about all configured agents and their status
+ *
+ * Returns: #GSList of agents (stored as #GHashTable) on success,
+ *           %NULL on failure
+ */
+GIOStatus
+gami_manager_agents_async (GamiManager *ami, const gchar *action_id, 
+                           GamiListResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2389,8 +3489,8 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "AgentsComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "AgentsComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2400,11 +3500,11 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_agent_callback_login
+ * gami_manager_agent_callback_login:
  * @ami: #GamiManager
  * @agent: The ID of the agent to log in
  * @exten: The extension to use as callback
@@ -2414,10 +3514,6 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
  * @wrapup_time: (allow-none): The minimum amount of time after hangup before
  *            the agent will receive a new call
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Log in @agent and register callback to @exten (note that the action has 
@@ -2425,13 +3521,58 @@ gami_manager_agents (GamiManager *ami, const gchar *action_id,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
                                    const gchar *exten, const gchar *context,
                                    gboolean ack_call, guint wrapup_time,
-                                   const gchar *action_id,
-                                   GamiResponseFunc response_func,
-                                   gpointer response_data, GError **error)
+                                   const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_agent_callback_login_async (ami, agent, exten,
+                                                        context, ack_call,
+                                                        wrapup_time, action_id,
+                                                        func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_agent_callback_login_async:
+ * @ami: #GamiManager
+ * @agent: The ID of the agent to log in
+ * @exten: The extension to use as callback
+ * @context: (allow-none): The context to use as callback
+ * @ack_call: (allow-none): Whether calls should be acknowledged by the agent
+ *            (by pressing #)
+ * @wrapup_time: (allow-none): The minimum amount of time after hangup before
+ *            the agent will receive a new call
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Log in @agent and register callback to @exten (note that the action has 
+ * been deprecated in asterisk-1.4 and was removed in asterisk-1.6)
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_agent_callback_login_async (GamiManager *ami, const gchar *agent,
+                                         const gchar *exten,
+                                         const gchar *context,
+                                         gboolean ack_call, guint wrapup_time,
+                                         const gchar *action_id,
+                                         GamiBoolResponseFunc response_func,
+                                         gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2459,8 +3600,8 @@ gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2470,29 +3611,58 @@ gami_manager_agent_callback_login (GamiManager *ami, const gchar *agent,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_agent_logoff
+ * gami_manager_agent_logoff:
  * @ami: #GamiManager
  * @agent: The ID of the agent to log off
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Log off @agent
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
-                           const gchar *action_id,
-                           GamiResponseFunc response_func,
-                           gpointer response_data, GError **error)
+                           const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_agent_logoff_async (ami, agent, action_id,
+                                                func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_agent_logoff_async:
+ * @ami: #GamiManager
+ * @agent: The ID of the agent to log off
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Log off @agent
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_agent_logoff_async (GamiManager *ami, const gchar *agent,
+                                 const gchar *action_id,
+                                 GamiBoolResponseFunc response_func,
+                                 gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2513,8 +3683,8 @@ gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2524,7 +3694,7 @@ gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /*
@@ -2532,26 +3702,56 @@ gami_manager_agent_logoff (GamiManager *ami, const gchar *agent,
  */
 
 /**
- * gami_manager_db_get
+ * gami_manager_db_get:
  * @ami: #GamiManager
  * @family: The AstDB key family from which to retrieve the value
  * @key: The name of the AstDB key
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve value of AstDB entry @family/@key
+ *
+ * Returns: the value of @family/@key on success, %NULL on failure
+ */
+gchar *
+gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
+                     const gchar *action_id, GError **error)
+{
+    gchar     *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiStringResponseFunc func = (GamiStringResponseFunc) set_string_response;
+    iostatus = gami_manager_db_get_async (ami, family, key, action_id,
+                                          func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_db_get_async:
+ * @ami: #GamiManager
+ * @family: The AstDB key family from which to retrieve the value
+ * @key: The name of the AstDB key
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve value of AstDB entry @family/@key
  *
  * Returns: the value of @family/@key on success, %FALSE on failure
  */
-GamiResponse *
-gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
-                     const gchar *action_id,
-                     GamiResponseFunc response_func, gpointer response_data,
-                     GError **error)
+GIOStatus
+gami_manager_db_get_async (GamiManager *ami, const gchar *family,
+                           const gchar *key, const gchar *action_id,
+                           GamiStringResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2572,8 +3772,8 @@ gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_string_response, "Val",
-                     response_func, response_data);
+                     string_action_hook_new (response_func, response_data,
+                                             "Val"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2583,31 +3783,63 @@ gami_manager_db_get (GamiManager *ami, const gchar *family, const gchar *key,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_db_put
+ * gami_manager_db_put:
  * @ami: #GamiManager
  * @family: The AstDB key family in which to set the value
  * @key: The name of the AstDB key
  * @val: The value to assign to the key
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set AstDB entry @family/@key to @value
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
-                     const gchar *val, const gchar *action_id,
-                     GamiResponseFunc response_func, gpointer response_data,
-                     GError **error)
+                     const gchar *val, const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_db_put_async (ami, family, key, val, action_id,
+                                          func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_db_put_async:
+ * @ami: #GamiManager
+ * @family: The AstDB key family in which to set the value
+ * @key: The name of the AstDB key
+ * @val: The value to assign to the key
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Set AstDB entry @family/@key to @value
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_db_put_async (GamiManager *ami, const gchar *family,
+                           const gchar *key, const gchar *val,
+                           const gchar *action_id,
+                           GamiBoolResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2631,8 +3863,8 @@ gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2642,29 +3874,60 @@ gami_manager_db_put (GamiManager *ami, const gchar *family, const gchar *key,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_db_del
+ * gami_manager_db_del:
  * @ami: #GamiManager
  * @family: The AstDB key family in which to delete the key
  * @key: The name of the AstDB key to delete
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Remove AstDB entry @family/@key
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_db_del (GamiManager *ami, const gchar *family, const gchar *key,
-                     const gchar *action_id, GamiResponseFunc response_func,
-                     gpointer response_data, GError **error)
+                     const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_db_del_async (ami, family, key, action_id,
+                                          func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_db_del_async:
+ * @ami: #GamiManager
+ * @family: The AstDB key family in which to delete the key
+ * @key: The name of the AstDB key to delete
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Remove AstDB entry @family/@key
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_db_del_async (GamiManager *ami, const gchar *family,
+                           const gchar *key, const gchar *action_id,
+                           GamiBoolResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2685,8 +3948,8 @@ gami_manager_db_del (GamiManager *ami, const gchar *family, const gchar *key,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2696,29 +3959,58 @@ gami_manager_db_del (GamiManager *ami, const gchar *family, const gchar *key,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_db_del_tree
+ * gami_manager_db_del_tree:
  * @ami: #GamiManager
  * @family: The AstDB key family to delete
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Remove AstDB key family
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
-                          const gchar *action_id,
-                          GamiResponseFunc response_func,
-                          gpointer response_data, GError **error)
+                          const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_db_del_tree_async (ami, family, action_id,
+                                               func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_db_del_tree_async:
+ * @ami: #GamiManager
+ * @family: The AstDB key family to delete
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Remove AstDB key family
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_db_del_tree_async (GamiManager *ami, const gchar *family,
+                                const gchar *action_id,
+                                GamiBoolResponseFunc response_func,
+                                gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2739,8 +4031,8 @@ gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2750,7 +4042,7 @@ gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -2759,28 +4051,62 @@ gami_manager_db_del_tree (GamiManager *ami, const gchar *family,
  */
 
 /**
- * gami_manager_park
+ * gami_manager_park:
  * @ami: #GamiManager
  * @channel: Channel name to park
  * @channel2: Channel to announce park info to (and return the call to if the
  *            parking times out)
  * @timeout: (allow-none): Milliseconds to wait before callback
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Park a channel in the parking lot
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_park (GamiManager *ami, const gchar *channel,
                    const gchar *channel2, guint timeout, const gchar *action_id,
-                   GamiResponseFunc response_func, gpointer response_data,
                    GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_park_async (ami, channel, channel2, timeout,
+                                        action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_park_async:
+ * @ami: #GamiManager
+ * @channel: Channel name to park
+ * @channel2: Channel to announce park info to (and return the call to if the
+ *            parking times out)
+ * @timeout: (allow-none): Milliseconds to wait before callback
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Park a channel in the parking lot
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_park_async (GamiManager *ami, const gchar *channel,
+                         const gchar *channel2, guint timeout,
+                         const gchar *action_id,
+                         GamiBoolResponseFunc response_func,
+                         gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2805,8 +4131,8 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2816,17 +4142,13 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_parked_calls
+ * gami_manager_parked_calls:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of parked calls
@@ -2834,10 +4156,43 @@ gami_manager_park (GamiManager *ami, const gchar *channel,
  * Returns: #GSList of parked calls (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
-                           GamiResponseFunc response_func,
-                           gpointer response_data, GError **error)
+                           GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_parked_calls_async (ami, action_id,
+                                                func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_parked_calls_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve a list of parked calls
+ *
+ * Returns: #GSList of parked calls (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_parked_calls_async (GamiManager *ami, const gchar *action_id,
+                                 GamiListResponseFunc response_func,
+                                 gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2856,8 +4211,8 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_list_response, "ParkedCallsComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "ParkedCallsComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2867,7 +4222,7 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -2876,13 +4231,9 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
  */
 
 /**
- * gami_manager_voicemail_users_list
+ * gami_manager_voicemail_users_list:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of voicemail users
@@ -2890,10 +4241,44 @@ gami_manager_parked_calls (GamiManager *ami, const gchar *action_id,
  * Returns: #GSList of voicemail users (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_voicemail_users_list (GamiManager *ami, const gchar *action_id,
-                                   GamiResponseFunc response_func,
-                                   gpointer response_data, GError **error)
+                                   GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_voicemail_users_list_async (ami, action_id,
+                                                        func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_voicemail_users_list_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve a list of voicemail users
+ *
+ * Returns: #GSList of voicemail users (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_voicemail_users_list_async (GamiManager *ami,
+                                         const gchar *action_id,
+                                         GamiListResponseFunc response_func,
+                                         gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2912,8 +4297,8 @@ gami_manager_voicemail_users_list (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_list_response, "VoicemailUserEntryComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "VoicemailUserEntryComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -2923,29 +4308,58 @@ gami_manager_voicemail_users_list (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_mailbox_count
+ * gami_manager_mailbox_count:
  * @ami: #GamiManager
  * @mailbox: The mailbox to check messages for
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve count of new and old messages in @mailbox
  *
  * Returns: #GHashTable with message counts on success, %NULL on failure
  */
-GamiResponse *
+GHashTable *
 gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
-                            const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            const gchar *action_id, GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_mailbox_count_async (ami, mailbox, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_mailbox_count_async:
+ * @ami: #GamiManager
+ * @mailbox: The mailbox to check messages for
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve count of new and old messages in @mailbox
+ *
+ * Returns: #GHashTable with message counts on success, %NULL on failure
+ */
+GIOStatus
+gami_manager_mailbox_count_async (GamiManager *ami, const gchar *mailbox,
+                                  const gchar *action_id,
+                                  GamiHashResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -2965,8 +4379,7 @@ gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Mailbox: %s\r\n\r\n", mailbox);
@@ -2976,29 +4389,58 @@ gami_manager_mailbox_count (GamiManager *ami, const gchar *mailbox,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_mailbox_status
+ * gami_manager_mailbox_status:
  * @ami: #GamiManager
  * @mailbox: The mailbox to check status for
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Check the status of @mailbox
  *
  * Returns: #GHashTable with status variables on success, %NULL on failure
  */
-GamiResponse *
+GHashTable *
 gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
-                             const gchar *action_id,
-                             GamiResponseFunc response_func,
-                             gpointer response_data, GError **error)
+                             const gchar *action_id, GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_mailbox_status_async (ami, mailbox, action_id,
+                                                  func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_mailbox_status_async:
+ * @ami: #GamiManager
+ * @mailbox: The mailbox to check status for
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Check the status of @mailbox
+ *
+ * Returns: #GHashTable with status variables on success, %NULL on failure
+ */
+GIOStatus
+gami_manager_mailbox_status_async (GamiManager *ami, const gchar *mailbox,
+                                   const gchar *action_id,
+                                   GamiHashResponseFunc response_func,
+                                   gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3018,8 +4460,7 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Mailbox: %s\r\n\r\n", mailbox);
@@ -3029,7 +4470,7 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -3038,13 +4479,9 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
  */
 
 /**
- * gami_manager_core_status
+ * gami_manager_core_status:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve information about the current PBX core status (as active calls,
@@ -3052,10 +4489,43 @@ gami_manager_mailbox_status (GamiManager *ami, const gchar *mailbox,
  *
  * Returns: #GHashTable with status variables on success, %NULL on failure
  */
-GamiResponse *
+GHashTable *
 gami_manager_core_status (GamiManager *ami, const gchar *action_id,
-                          GamiResponseFunc response_func,
-                          gpointer response_data, GError **error)
+                          GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_core_status_async (ami, action_id,
+                                               func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_core_status_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve information about the current PBX core status (as active calls,
+ * startup time etc.)
+ *
+ * Returns: #GHashTable with status variables on success, %NULL on failure
+ */
+GIOStatus
+gami_manager_core_status_async (GamiManager *ami, const gchar *action_id,
+                                GamiHashResponseFunc response_func,
+                                gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3074,8 +4544,7 @@ gami_manager_core_status (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3085,17 +4554,13 @@ gami_manager_core_status (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_core_show_channels
+ * gami_manager_core_show_channels:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of currently active channels
@@ -3103,10 +4568,43 @@ gami_manager_core_status (GamiManager *ami, const gchar *action_id,
  * Returns: #GSList of active channels (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_core_show_channels (GamiManager *ami, const gchar *action_id,
-                                 GamiResponseFunc response_func,
-                                 gpointer response_data, GError **error)
+                                 GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_core_show_channels_async (ami, action_id,
+                                                      func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_core_show_channels_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve a list of currently active channels
+ *
+ * Returns: #GSList of active channels (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_core_show_channels_async (GamiManager *ami, const gchar *action_id,
+                                       GamiListResponseFunc response_func,
+                                       gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3125,8 +4623,8 @@ gami_manager_core_show_channels (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_list_response, "CoreShowChannelsComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "CoreShowChannelsComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3136,27 +4634,55 @@ gami_manager_core_show_channels (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_core_settings
+ * gami_manager_core_settings:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve information about PBX core settings (as Asterisk/GAMI version etc.)
  *
  * Returns: #GHashTable with settings variables on success, %NULL on failure
  */
-GamiResponse *
+GHashTable *
 gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_core_settings_async (ami, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_core_settings_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve information about PBX core settings (as Asterisk/GAMI version etc.)
+ *
+ * Returns: #GHashTable with settings variables on success, %NULL on failure
+ */
+GIOStatus
+gami_manager_core_settings_async (GamiManager *ami, const gchar *action_id,
+                                  GamiHashResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3175,8 +4701,7 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3186,7 +4711,7 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /*
@@ -3194,13 +4719,9 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
  */
 
 /**
- * gami_manager_iax_peer_list
+ * gami_manager_iax_peer_list:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of IAX2 peers
@@ -3208,10 +4729,43 @@ gami_manager_core_settings (GamiManager *ami, const gchar *action_id,
  * Returns: #GSList of IAX2 peers (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_iax_peer_list_async (ami, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_iax_peer_list_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve a list of IAX2 peers
+ *
+ * Returns: #GSList of IAX2 peers (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_iax_peer_list_async (GamiManager *ami, const gchar *action_id,
+                                  GamiListResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3230,8 +4784,8 @@ gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_list_response, "PeerlistComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "PeerlistComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3241,17 +4795,13 @@ gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_sip_peers
+ * gami_manager_sip_peers:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of SIP peers
@@ -3259,10 +4809,42 @@ gami_manager_iax_peer_list (GamiManager *ami, const gchar *action_id,
  * Returns: #GSList of SIP peers (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
-                        GamiResponseFunc response_func, gpointer response_data,
                         GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_sip_peers_async (ami, action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_sip_peers_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve a list of SIP peers
+ *
+ * Returns: #GSList of SIP peers (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_sip_peers_async (GamiManager *ami, const gchar *action_id,
+                              GamiListResponseFunc response_func,
+                              gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3281,8 +4863,8 @@ gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_list_response, "PeerlistComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "PeerlistComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3292,11 +4874,42 @@ gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_sip_show_peer
+ * gami_manager_sip_show_peer:
+ * @ami: #GamiManager
+ * @peer: SIP peer to get status information for
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve status information for @peer
+ *
+ * Returns: #GHashTable of peer status information on success, %NULL on failure
+ */
+GHashTable *
+gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
+                            const gchar *action_id, GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_sip_show_peer_async (ami, peer, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_sip_show_peer_async:
  * @ami: #GamiManager
  * @peer: SIP peer to get status information for
  * @action_id: (allow-none): ActionID to ease response matching
@@ -3310,11 +4923,11 @@ gami_manager_sip_peers (GamiManager *ami, const gchar *action_id,
  *
  * Returns: #GHashTable of peer status information on success, %NULL on failure
  */
-GamiResponse *
-gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
-                            const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+GIOStatus
+gami_manager_sip_show_peer_async (GamiManager *ami, const gchar *peer,
+                                  const gchar *action_id,
+                                  GamiHashResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3334,8 +4947,7 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Peer: %s\r\n\r\n", peer);
@@ -3345,17 +4957,13 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_sip_show_registry
+ * gami_manager_sip_show_registry:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve registry information of SIP peers
@@ -3363,10 +4971,43 @@ gami_manager_sip_show_peer (GamiManager *ami, const gchar *peer,
  * Returns: #GSList of registry information (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
-                                GamiResponseFunc response_func,
-                                gpointer response_data, GError **error)
+                                GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_sip_show_registry_async (ami, action_id,
+                                                     func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_sip_show_registry_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve registry information of SIP peers
+ *
+ * Returns: #GSList of registry information (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_sip_show_registry_async (GamiManager *ami, const gchar *action_id,
+                                      GamiListResponseFunc response_func,
+                                      gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3385,9 +5026,8 @@ gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_list_response, "RegistrationsComplete",
-                     response_func, response_data);
-    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+                     list_action_hook_new (response_func, response_data,
+                                           "RegistrationsComplete"));
 
     g_string_append (action, "\r\n");
 
@@ -3396,18 +5036,14 @@ gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_status
+ * gami_manager_status:
  * @ami: #GamiManager
  * @channel: (allow-none): Only retrieve status information for this channel
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve status information of active channels (or @channel)
@@ -3415,11 +5051,45 @@ gami_manager_sip_show_registry (GamiManager *ami, const gchar *action_id,
  * Returns: #GSList of status information (stored as #GHashTable) on success,
  *          %NULL on failure
  */
-GamiResponse *
+GSList *
 gami_manager_status (GamiManager *ami, const gchar *channel,
-                     const gchar *action_id,
-                     GamiResponseFunc response_func, gpointer response_data, 
-                     GError **error)
+                     const gchar *action_id, GError **error)
+{
+    GSList    *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiListResponseFunc func = (GamiListResponseFunc) set_list_response;
+    iostatus = gami_manager_status_async (ami, channel, action_id,
+                                          func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_status_async:
+ * @ami: #GamiManager
+ * @channel: (allow-none): Only retrieve status information for this channel
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve status information of active channels (or @channel)
+ *
+ * Returns: #GSList of status information (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_status_async (GamiManager *ami, const gchar *channel,
+                           const gchar *action_id,
+                           GamiListResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3441,8 +5111,8 @@ gami_manager_status (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_list_response, "StatusComplete",
-                     response_func, response_data);
+                     list_action_hook_new (response_func, response_data,
+                                           "StatusComplete"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3452,19 +5122,15 @@ gami_manager_status (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_extension_state
+ * gami_manager_extension_state:
  * @ami: #GamiManager
  * @exten: The name of the extension to check
  * @context: The context of the extension to check
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Check extension state of @exten@@context - if hints are properly configured
@@ -3473,11 +5139,49 @@ gami_manager_status (GamiManager *ami, const gchar *channel,
  *
  * Returns: #GHashTable of status information on success, %NULL on failure
  */
-GamiResponse *
+GHashTable *
 gami_manager_extension_state (GamiManager *ami, const gchar *exten,
                               const gchar *context, const gchar *action_id,
-                              GamiResponseFunc response_func,
-                              gpointer response_data, GError **error)
+                              GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_extension_state_async (ami, exten, context,
+                                                   action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_extension_state_async:
+ * @ami: #GamiManager
+ * @exten: The name of the extension to check
+ * @context: The context of the extension to check
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Check extension state of @exten@@context - if hints are properly configured
+ * on the server, the action will report the status of the device connected to
+ * @exten
+ *
+ * Returns: #GHashTable of status information on success, %NULL on failure
+ */
+GIOStatus
+gami_manager_extension_state_async (GamiManager *ami, const gchar *exten,
+                                    const gchar *context,
+                                    const gchar *action_id,
+                                    GamiHashResponseFunc response_func,
+                                    gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3497,8 +5201,7 @@ gami_manager_extension_state (GamiManager *ami, const gchar *exten,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Exten: %s\r\nContext: %s\r\n\r\n",
@@ -3509,17 +5212,13 @@ gami_manager_extension_state (GamiManager *ami, const gchar *exten,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_ping
+ * gami_manager_ping:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Query the Asterisk server to make sure it is still responding. May be used
@@ -3527,10 +5226,41 @@ gami_manager_extension_state (GamiManager *ami, const gchar *exten,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
-gami_manager_ping (GamiManager *ami, const gchar *action_id,
-                   GamiResponseFunc response_func, gpointer response_data,
-                   GError **error)
+gboolean
+gami_manager_ping (GamiManager *ami, const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_ping_async (ami, action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_ping_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Query the Asterisk server to make sure it is still responding. May be used
+ * to keep the connection alive
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_ping_async (GamiManager *ami, const gchar *action_id,
+                         GamiBoolResponseFunc response_func,
+                         gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3549,10 +5279,10 @@ gami_manager_ping (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response,
-                     (ami->api_major && ami->api_minor) ? "Success"
-                                                        : "Pong",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           (ami->api_major
+                                            && ami->api_minor) ? "Success"
+                                                               : "Pong"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3561,30 +5291,62 @@ gami_manager_ping (GamiManager *ami, const gchar *action_id,
 
     iostatus = send_command (priv->socket, action_str, error);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_absolute_timeout
+ * gami_manager_absolute_timeout:
  * @ami: #GamiManager
  * @channel: The name of the channel to set the timeout for
  * @timeout: The maximum duration of the current call, in seconds
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set timeout for call on @channel to @timeout seconds
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_absolute_timeout (GamiManager *ami, const gchar *channel,
                                gint timeout, const gchar *action_id,
-                               GamiResponseFunc response_func,
-                               gpointer response_data, GError **error)
+                               GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_absolute_timeout_async (ami, channel, timeout,
+                                                    action_id, func, &rv,
+                                                    error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_absolute_timeout_async:
+ * @ami: #GamiManager
+ * @channel: The name of the channel to set the timeout for
+ * @timeout: The maximum duration of the current call, in seconds
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Set timeout for call on @channel to @timeout seconds
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_absolute_timeout_async (GamiManager *ami, const gchar *channel,
+                                     gint timeout, const gchar *action_id,
+                                     GamiBoolResponseFunc response_func,
+                                     gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3604,8 +5366,8 @@ gami_manager_absolute_timeout (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\nTimeout: %d\r\n\r\n",
@@ -3616,28 +5378,58 @@ gami_manager_absolute_timeout (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_challenge
+ * gami_manager_challenge:
  * @ami: #GamiManager
  * @auth_type: The authentification type to generate challenge for (e.g. "md5")
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a challenge string to use for authentification of type @auth_type
  *
  * Returns: the generated challenge on success, %FALSE on failure
  */
-GamiResponse *
+gchar *
 gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
-                        const gchar *action_id, GamiResponseFunc response_func,
-                        gpointer response_data, GError **error)
+                        const gchar *action_id, GError **error)
+{
+    gchar     *rv = NULL;
+    GIOStatus  iostatus;
+
+    GamiStringResponseFunc func = (GamiStringResponseFunc) set_string_response;
+    iostatus = gami_manager_challenge_async (ami, auth_type, action_id,
+                                             func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_challenge_async:
+ * @ami: #GamiManager
+ * @auth_type: The authentification type to generate challenge for (e.g. "md5")
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Retrieve a challenge string to use for authentification of type @auth_type
+ *
+ * Returns: the generated challenge on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_challenge_async (GamiManager *ami, const gchar *auth_type,
+                              const gchar *action_id,
+                              GamiStringResponseFunc response_func,
+                              gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3658,8 +5450,8 @@ gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_string_response, "Challenge",
-                     response_func, response_data);
+                     string_action_hook_new (response_func, response_data,
+                                             "Challenge"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3669,32 +5461,65 @@ gami_manager_challenge (GamiManager *ami, const gchar *auth_type,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_set_cdr_user_field
+ * gami_manager_set_cdr_user_field:
  * @ami: #GamiManager
  * @channel: The name of the channel to set @user_field for
  * @user_field: The value for the CDR user field
  * @append: (allow-none): Whether to append @user_field to current value
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set CDR user field for @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_set_cdr_user_field (GamiManager *ami, const gchar *channel,
                                  const gchar *user_field, gboolean append,
-                                 const gchar *action_id,
-                                 GamiResponseFunc response_func,
-                                 gpointer response_data, GError **error)
+                                 const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_set_cdr_user_field_async (ami, channel, user_field,
+                                                      append, action_id,
+                                                      func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_set_cdr_user_field_async:
+ * @ami: #GamiManager
+ * @channel: The name of the channel to set @user_field for
+ * @user_field: The value for the CDR user field
+ * @append: (allow-none): Whether to append @user_field to current value
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Set CDR user field for @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_set_cdr_user_field_async (GamiManager *ami, const gchar *channel,
+                                       const gchar *user_field, gboolean append,
+                                       const gchar *action_id,
+                                       GamiBoolResponseFunc response_func,
+                                       gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3717,8 +5542,8 @@ gami_manager_set_cdr_user_field (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\nUserField: %s\r\n\r\n",
@@ -3729,29 +5554,60 @@ gami_manager_set_cdr_user_field (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_reload
+ * gami_manager_reload:
  * @ami: #GamiManager
  * @module: (allow-none): The name of the module to reload (not including
  *           extension)
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Reload @module or all modules
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_reload (GamiManager *ami, const gchar *module,
-                     const gchar *action_id, GamiResponseFunc response_func,
-                     gpointer response_data, GError **error)
+                     const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_reload_async (ami, module, action_id,
+                                          func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_reload_async:
+ * @ami: #GamiManager
+ * @module: (allow-none): The name of the module to reload (not including
+ *           extension)
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Reload @module or all modules
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_reload_async (GamiManager *ami, const gchar *module,
+                           const gchar *action_id,
+                           GamiBoolResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3773,8 +5629,8 @@ gami_manager_reload (GamiManager *ami, const gchar *module,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3784,29 +5640,58 @@ gami_manager_reload (GamiManager *ami, const gchar *module,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_hangup
+ * gami_manager_hangup:
  * @ami: #GamiManager
  * @channel: The name of the channel to hang up
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Hang up @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_hangup (GamiManager *ami, const gchar *channel,
-                     const gchar *action_id,
-                     GamiResponseFunc response_func, gpointer response_data,
-                     GError **error)
+                     const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_hangup_async (ami, channel, action_id,
+                                          func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_hangup_async:
+ * @ami: #GamiManager
+ * @channel: The name of the channel to hang up
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Hang up @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_hangup_async (GamiManager *ami, const gchar *channel,
+                           const gchar *action_id,
+                           GamiBoolResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3826,8 +5711,8 @@ gami_manager_hangup (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Channel: %s\r\n\r\n", channel);
@@ -3837,11 +5722,11 @@ gami_manager_hangup (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_redirect
+ * gami_manager_redirect:
  * @ami: #GamiManager
  * @channel: The name of the channel redirect
  * @extra_channel: (allow-none): Second call leg to transfer
@@ -3849,23 +5734,59 @@ gami_manager_hangup (GamiManager *ami, const gchar *channel,
  * @context: The context @channel should be redirected to
  * @priority: The priority @channel should be redirected to
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Redirect @channel to @exten@@context:@priority
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_redirect (GamiManager *ami, const gchar *channel,
                        const gchar *extra_channel, const gchar *exten,
                        const gchar *context, const gchar *priority,
-                       const gchar *action_id,
-                       GamiResponseFunc response_func, gpointer response_data,
-                       GError **error)
+                       const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_redirect_async (ami, channel, extra_channel, exten,
+                                            context, priority, action_id,
+                                            func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_redirect_async:
+ * @ami: #GamiManager
+ * @channel: The name of the channel redirect
+ * @extra_channel: (allow-none): Second call leg to transfer
+ * @exten: The extension @channel should be redirected to
+ * @context: The context @channel should be redirected to
+ * @priority: The priority @channel should be redirected to
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Redirect @channel to @exten@@context:@priority
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_redirect_async (GamiManager *ami, const gchar *channel,
+                             const gchar *extra_channel, const gchar *exten,
+                             const gchar *context, const gchar *priority,
+                             const gchar *action_id,
+                             GamiBoolResponseFunc response_func,
+                             gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3890,8 +5811,8 @@ gami_manager_redirect (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Exten: %s\r\nContext: %s\r\n"
@@ -3902,31 +5823,64 @@ gami_manager_redirect (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_bridge
+ * gami_manager_bridge:
  * @ami: #GamiManager
  * @channel1: The name of the channel to bridge to @channel2
  * @channel2: The name of the channel to bridge to @channel1
  * @tone: Whether to play courtesy tone to @channel2
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Bridge together the existing channels @channel1 and @channel2
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_bridge (GamiManager *ami, const gchar *channel1,
                      const gchar *channel2, gboolean tone,
-                     const gchar *action_id, GamiResponseFunc response_func,
-                     gpointer response_data, GError **error)
+                     const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_bridge_async (ami, channel1, channel2, tone,
+                                          action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_bridge_async:
+ * @ami: #GamiManager
+ * @channel1: The name of the channel to bridge to @channel2
+ * @channel2: The name of the channel to bridge to @channel1
+ * @tone: Whether to play courtesy tone to @channel2
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Bridge together the existing channels @channel1 and @channel2
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_bridge_async (GamiManager *ami, const gchar *channel1,
+                           const gchar *channel2, gboolean tone,
+                           const gchar *action_id,
+                           GamiBoolResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -3950,8 +5904,8 @@ gami_manager_bridge (GamiManager *ami, const gchar *channel1,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -3961,31 +5915,64 @@ gami_manager_bridge (GamiManager *ami, const gchar *channel1,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_agi
+ * gami_manager_agi:
  * @ami: #GamiManager
  * @channel: The name of the channel to execute @command in
  * @command: The name of the AGI command to execute
  * @command_id: (allow-none): CommandID for matching in AGI notification events
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Execute AGI command @command in @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
                   const gchar *command_id, const gchar *action_id,
-                  GamiResponseFunc response_func, gpointer response_data, 
                   GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_agi_async (ami, channel, command, command_id,
+                                       action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_agi_async:
+ * @ami: #GamiManager
+ * @channel: The name of the channel to execute @command in
+ * @command: The name of the AGI command to execute
+ * @command_id: (allow-none): CommandID for matching in AGI notification events
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Execute AGI command @command in @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_agi_async (GamiManager *ami, const gchar *channel,
+                        const gchar *command, const gchar *command_id,
+                        const gchar *action_id,
+                        GamiBoolResponseFunc response_func,
+                        gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4010,8 +5997,8 @@ gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -4021,30 +6008,61 @@ gami_manager_agi (GamiManager *ami, const gchar *channel, const gchar *command,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_send_text
+ * gami_manager_send_text:
  * @ami: #GamiManager
  * @channel: The name of the channel to send @message to
  * @message: The message to send to @channel
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Send @message to @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_send_text (GamiManager *ami, const gchar *channel,
                         const gchar *message, const gchar *action_id,
-                        GamiResponseFunc response_func, gpointer response_data,
                         GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_send_text_async (ami, channel, message,
+                                             action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_send_text_async:
+ * @ami: #GamiManager
+ * @channel: The name of the channel to send @message to
+ * @message: The message to send to @channel
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Send @message to @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_send_text_async (GamiManager *ami, const gchar *channel,
+                              const gchar *message, const gchar *action_id,
+                              GamiBoolResponseFunc response_func,
+                              gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4066,8 +6084,8 @@ gami_manager_send_text (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -4077,32 +6095,65 @@ gami_manager_send_text (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_jabber_send
+ * gami_manager_jabber_send:
  * @ami: #GamiManager
  * @jabber: Jabber / GTalk account to send message from
  * @screen_name: Jabber / GTalk account to send message to
  * @message: The message to send
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Send @message from Jabber / GTalk account @jabber to account @screen_name
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
                           const gchar *screen_name, const gchar *message,
-                          const gchar *action_id,
-                          GamiResponseFunc response_func,
-                          gpointer response_data, GError **error)
+                          const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_jabber_send_async (ami, jabber, screen_name,
+                                               message, action_id, func,
+                                               &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_jabber_send_async:
+ * @ami: #GamiManager
+ * @jabber: Jabber / GTalk account to send message from
+ * @screen_name: Jabber / GTalk account to send message to
+ * @message: The message to send
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Send @message from Jabber / GTalk account @jabber to account @screen_name
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_jabber_send_async (GamiManager *ami, const gchar *jabber,
+                                const gchar *screen_name, const gchar *message,
+                                const gchar *action_id,
+                                GamiBoolResponseFunc response_func,
+                                gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4124,8 +6175,8 @@ gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Message: %s\r\n\r\n", message);
@@ -4135,30 +6186,60 @@ gami_manager_jabber_send (GamiManager *ami, const gchar *jabber,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_play_dtmf
+ * gami_manager_play_dtmf:
  * @ami: #GamiManager
  * @channel: The name of the channel to send @digit to
  * @digit: The DTMF digit to play on @channel
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Play a DTMF digit @digit on @channel
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
-                        const gchar *action_id,
-                        GamiResponseFunc response_func, gpointer response_data,
-                        GError **error)
+                        const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_play_dtmf_async (ami, channel, digit, action_id,
+                                             func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_play_dtmf_async:
+ * @ami: #GamiManager
+ * @channel: The name of the channel to send @digit to
+ * @digit: The DTMF digit to play on @channel
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Play a DTMF digit @digit on @channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_play_dtmf_async (GamiManager *ami, const gchar *channel,
+                              gchar digit, const gchar *action_id,
+                              GamiBoolResponseFunc response_func,
+                              gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4182,8 +6263,8 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -4193,17 +6274,13 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_list_commands
+ * gami_manager_list_commands:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * List available Asterisk manager commands - the available actions may vary
@@ -4212,10 +6289,44 @@ gami_manager_play_dtmf (GamiManager *ami, const gchar *channel, gchar digit,
  * Returns: A #GHashTable of action names / descriptions on success, 
  *          %NULL on failure
  */
-GamiResponse *
+GHashTable *
 gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_list_commands_async (ami, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_list_commands_async:
+ * @ami: #GamiManager
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * List available Asterisk manager commands - the available actions may vary
+ * between different versions of Asterisk and due to the set of loaded modules
+ *
+ * Returns: A #GHashTable of action names / descriptions on success, 
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_list_commands_async (GamiManager *ami, const gchar *action_id,
+                                  GamiHashResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4234,8 +6345,7 @@ gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -4245,18 +6355,14 @@ gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_list_categories
+ * gami_manager_list_categories:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to list categories for
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * List categories in @filename
@@ -4264,11 +6370,45 @@ gami_manager_list_commands (GamiManager *ami, const gchar *action_id,
  * Returns: A #GHashTable of category number / name on success, 
  *          %NULL on failure
  */
-GamiResponse *
+GHashTable *
 gami_manager_list_categories (GamiManager *ami, const gchar *filename,
-                              const gchar *action_id,
-                              GamiResponseFunc response_func,
-                              gpointer response_data, GError **error)
+                              const gchar *action_id, GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_list_categories_async (ami, filename, action_id,
+                                                   func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_list_categories_async:
+ * @ami: #GamiManager
+ * @filename: The name of the configuration file to list categories for
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * List categories in @filename
+ *
+ * Returns: A #GHashTable of category number / name on success, 
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_list_categories_async (GamiManager *ami, const gchar *filename,
+                                    const gchar *action_id,
+                                    GamiHashResponseFunc response_func,
+                                    gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4288,8 +6428,7 @@ gami_manager_list_categories (GamiManager *ami, const gchar *filename,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Filename: %s\r\n\r\n", filename);
@@ -4299,18 +6438,14 @@ gami_manager_list_categories (GamiManager *ami, const gchar *filename,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_get_config
+ * gami_manager_get_config:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to get content for
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Get content of configuration file @filename
@@ -4318,11 +6453,45 @@ gami_manager_list_categories (GamiManager *ami, const gchar *filename,
  * Returns: A #GHashTable of line number / values on success, 
  *          %NULL on failure
  */
-GamiResponse *
+GHashTable *
 gami_manager_get_config (GamiManager *ami, const gchar *filename,
-                         const gchar *action_id,
-                         GamiResponseFunc response_func,
-                         gpointer response_data, GError **error)
+                         const gchar *action_id, GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_get_config_async (ami, filename, action_id,
+                                              func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_get_config_async:
+ * @ami: #GamiManager
+ * @filename: The name of the configuration file to get content for
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Get content of configuration file @filename
+ *
+ * Returns: A #GHashTable of line number / values on success, 
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_get_config_async (GamiManager *ami, const gchar *filename,
+                               const gchar *action_id,
+                               GamiHashResponseFunc response_func,
+                               gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4342,8 +6511,7 @@ gami_manager_get_config (GamiManager *ami, const gchar *filename,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Filename: %s\r\n\r\n", filename);
@@ -4353,18 +6521,14 @@ gami_manager_get_config (GamiManager *ami, const gchar *filename,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_get_config_json
+ * gami_manager_get_config_json:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to get content for
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Get content of configuration file @filename as JS hash for use with JSON
@@ -4372,11 +6536,45 @@ gami_manager_get_config (GamiManager *ami, const gchar *filename,
  * Returns: A #GHashTable with file dump on success,
  *          %NULL on failure
  */
-GamiResponse *
+GHashTable *
 gami_manager_get_config_json (GamiManager *ami, const gchar *filename,
-                              const gchar *action_id,
-                              GamiResponseFunc response_func,
-                              gpointer response_data, GError **error)
+                              const gchar *action_id, GError **error)
+{
+    GHashTable *rv = NULL;
+    GIOStatus   iostatus;
+
+    GamiHashResponseFunc func = (GamiHashResponseFunc) set_hash_response;
+    iostatus = gami_manager_get_config_json_async (ami, filename, action_id,
+                                                   func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == NULL)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_get_config_json_async:
+ * @ami: #GamiManager
+ * @filename: The name of the configuration file to get content for
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Get content of configuration file @filename as JS hash for use with JSON
+ *
+ * Returns: A #GHashTable with file dump on success,
+ *          %NULL on failure
+ */
+GIOStatus
+gami_manager_get_config_json_async (GamiManager *ami, const gchar *filename,
+                                    const gchar *action_id,
+                                    GamiHashResponseFunc response_func,
+                                    gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4396,8 +6594,7 @@ gami_manager_get_config_json (GamiManager *ami, const gchar *filename,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_hash_response, NULL,
-                     response_func, response_data);
+                     hash_action_hook_new (response_func, response_data));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append_printf (action, "Filename: %s\r\n\r\n", filename);
@@ -4407,29 +6604,58 @@ gami_manager_get_config_json (GamiManager *ami, const gchar *filename,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_create_config
+ * gami_manager_create_config:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to create
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Create an empty configurion file @filename
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_create_config (GamiManager *ami, const gchar *filename,
-                            const gchar *action_id,
-                            GamiResponseFunc response_func,
-                            gpointer response_data, GError **error)
+                            const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_create_config_async (ami, filename, action_id,
+                                                 func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_create_config_async:
+ * @ami: #GamiManager
+ * @filename: The name of the configuration file to create
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Create an empty configurion file @filename
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_create_config_async (GamiManager *ami, const gchar *filename,
+                                  const gchar *action_id,
+                                  GamiBoolResponseFunc response_func,
+                                  gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4450,8 +6676,8 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -4461,11 +6687,11 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_originate
+ * gami_manager_originate:
  * @ami: #GamiManager
  * @channel: The name of the channel to call. Once the channel has answered,
  *           the call will be passed to the specified exten/context/priority or
@@ -4484,10 +6710,6 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
  * @async: (allow-none): Whether to originate call asynchronously - this allows
  *         to originate further calls before a response is received
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Generate an outbound call from Asterisk and connect the channel to
@@ -4495,15 +6717,72 @@ gami_manager_create_config (GamiManager *ami, const gchar *filename,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_originate (GamiManager *ami, const gchar *channel,
                         const gchar *application_exten,
                         const gchar *data_context, const gchar *priority,
                         guint timeout, const gchar *caller_id,
                         const gchar *account, const GHashTable *variables,
                         gboolean async, const gchar *action_id,
-                        GamiResponseFunc response_func, gpointer response_data,
                         GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_originate_async (ami, channel, application_exten,
+                                             data_context, priority, timeout,
+                                             caller_id, account, variables,
+                                             async, action_id,
+                                             func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_originate_async:
+ * @ami: #GamiManager
+ * @channel: The name of the channel to call. Once the channel has answered,
+ *           the call will be passed to the specified exten/context/priority or
+ *           application/data
+ * @application_exten: Extension to dial or application to call (depending on
+ *                     @priority)
+ * @data_context: Context to dial or data to pass to application (depending on
+ *                @priority)
+ * @priority: (allow-none): Priority to dial - if %NULL, @application_exten will
+ *            be interpretated as application and @data_context as data
+ * @timeout: (allow-none): Time to wait for @channel to answer in milliseconds
+ * @caller_id: (allow-none): CallerID to set on the outgoing channel
+ * @account: (allow-none): AccountCode to set for the call
+ * @variables: (allow-none): A #GHashTable with name / value pairs to pass as 
+ *             channel variables
+ * @async: (allow-none): Whether to originate call asynchronously - this allows
+ *         to originate further calls before a response is received
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Generate an outbound call from Asterisk and connect the channel to
+ * Exten / Context / Priority or execute Application (Data) on the channel
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_originate_async (GamiManager *ami, const gchar *channel,
+                              const gchar *application_exten,
+                              const gchar *data_context, const gchar *priority,
+                              guint timeout, const gchar *caller_id,
+                              const gchar *account, const GHashTable *variables,
+                              gboolean async, const gchar *action_id,
+                              GamiBoolResponseFunc response_func,
+                              gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4554,8 +6833,8 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -4565,18 +6844,14 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_events
+ * gami_manager_events:
  * @ami: #GamiManager
  * @event_mask: #GamiEventMask to set for the connection
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set #GamiEventMask for the connection to control which events shall be
@@ -4584,11 +6859,45 @@ gami_manager_originate (GamiManager *ami, const gchar *channel,
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
-                     const gchar *action_id,
-                     GamiResponseFunc response_func, gpointer response_data,
-                     GError **error)
+                     const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_events_async (ami, event_mask, action_id,
+                                          func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_events_async:
+ * @ami: #GamiManager
+ * @event_mask: #GamiEventMask to set for the connection
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Set #GamiEventMask for the connection to control which events shall be
+ * received
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_events_async (GamiManager *ami, const GamiEventMask event_mask,
+                           const gchar *action_id,
+                           GamiBoolResponseFunc response_func,
+                           gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4612,10 +6921,10 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response,
-                     (ami->api_major && ami->api_minor) ? "Success"
-                                                        : "Events Off",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           (ami->api_major
+                                            && ami->api_minor) ? "Success"
+                                                               : "Events Off"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -4625,30 +6934,62 @@ gami_manager_events (GamiManager *ami, const GamiEventMask event_mask,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_user_event
+ * gami_manager_user_event:
  * @ami: #GamiManager
  * @user_event: The user defined event to send
  * @headers: (allow-none): Optional header to add to the event
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Send the user defined event @user_event with an optional payload of @headers
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_user_event (GamiManager *ami, const gchar *user_event,
                          const GHashTable *headers, const gchar *action_id,
-                         GamiResponseFunc response_func,
-                         gpointer response_data, GError **error)
+                         GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_user_event_async (ami, user_event, headers,
+                                              action_id, func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_user_event_async:
+ * @ami: #GamiManager
+ * @user_event: The user defined event to send
+ * @headers: (allow-none): Optional header to add to the event
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Send the user defined event @user_event with an optional payload of @headers
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_user_event_async (GamiManager *ami, const gchar *user_event,
+                               const GHashTable *headers,
+                               const gchar *action_id,
+                               GamiBoolResponseFunc response_func,
+                               gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4680,8 +7021,8 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -4691,29 +7032,58 @@ gami_manager_user_event (GamiManager *ami, const gchar *user_event,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 /**
- * gami_manager_wait_event
+ * gami_manager_wait_event:
  * @ami: #GamiManager
  * @timeout: (allow-none): Maximum time to wait for events in seconds
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation. Passing %NULL will 
- *           trigger synchronious mode
- * @response_data: User data to pass to the callback. If %NULL is passed for 
- *           @response_func, the parameter is ignored
  * @error: A location to return an error of type #GIOChannelError
  *
  * Wait for an event to occur
  *
  * Returns: %TRUE on success, %FALSE on failure
  */
-GamiResponse *
+gboolean
 gami_manager_wait_event (GamiManager *ami, guint timeout,
-                         const gchar *action_id,
-                         GamiResponseFunc response_func,
-                         gpointer response_data, GError **error)
+                         const gchar *action_id, GError **error)
+{
+    gboolean   rv = -1;
+    GIOStatus  iostatus;
+
+    GamiBoolResponseFunc func = (GamiBoolResponseFunc) set_bool_response;
+    iostatus = gami_manager_wait_event_async (ami, timeout, action_id,
+                                              func, &rv, error);
+
+    if (iostatus != G_IO_STATUS_NORMAL)
+        return FALSE;
+
+    while (rv == -1)
+        g_main_context_iteration (NULL, TRUE);
+
+    return rv;
+}
+
+/**
+ * gami_manager_wait_event_async:
+ * @ami: #GamiManager
+ * @timeout: (allow-none): Maximum time to wait for events in seconds
+ * @action_id: (allow-none): ActionID to ease response matching
+ * @response_func: Callback for asynchronious operation.
+ * @response_data: User data to pass to the callback.
+ * @error: A location to return an error of type #GIOChannelError
+ *
+ * Wait for an event to occur
+ *
+ * Returns: %TRUE on success, %FALSE on failure
+ */
+GIOStatus
+gami_manager_wait_event_async (GamiManager *ami, guint timeout,
+                               const gchar *action_id,
+                               GamiBoolResponseFunc response_func,
+                               gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString   *action;
@@ -4735,8 +7105,8 @@ gami_manager_wait_event (GamiManager *ami, guint timeout,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     process_bool_response, "Success",
-                     response_func, response_data);
+                     bool_action_hook_new (response_func, response_data,
+                                           "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
     g_string_append (action, "\r\n");
@@ -4746,7 +7116,7 @@ gami_manager_wait_event (GamiManager *ami, guint timeout,
     iostatus = send_command (priv->socket, action_str, error);
     g_free (action_str);
 
-    return action_response (ami, iostatus, action_id_new, error);
+    return iostatus;
 }
 
 
@@ -5026,16 +7396,32 @@ process_packets (GamiManager *mgr)
         hook = action_id ? g_hash_table_lookup (priv->action_hooks, action_id)
                          : g_hash_table_lookup (priv->action_hooks, "current");
         if (hook) {
-            GamiResponse *resp;
+            switch (hook->type) {
+                gboolean    bool_resp;
+                gchar      *str_resp = NULL;
+                GHashTable *hash_resp = NULL;
+                GSList     *list_resp = NULL;
 
-            resp = hook->handler_func (packet, hook->handler_data);
-            if (resp) {
-                if (hook->user_func)
-                    hook->user_func (resp, hook->user_data);
-                else
-                    priv->sync_response = gami_response_ref (resp);
-
-                gami_response_unref (resp);
+                case GAMI_RESPONSE_TYPE_BOOL:
+                    bool_resp = process_bool_response (packet,
+                                                       hook->handler_data);
+                    hook->user_func.bool_func (bool_resp, hook->user_data);
+                    break;
+                case GAMI_RESPONSE_TYPE_STRING:
+                    str_resp = process_string_response (packet,
+                                                        hook->handler_data);
+                    hook->user_func.string_func (str_resp, hook->user_data);
+                    break;
+                case GAMI_RESPONSE_TYPE_HASH:
+                    hash_resp = process_hash_response (packet);
+                    hook->user_func.hash_func (hash_resp, hook->user_data);
+                    break;
+                case GAMI_RESPONSE_TYPE_LIST:
+                    list_resp = process_list_response (packet,
+                                                       hook->handler_data);
+                    if (list_resp)
+                        hook->user_func.list_func (list_resp, hook->user_data);
+                    break;
             }
         }
     } else if (g_hash_table_lookup (packet, "Event"))
@@ -5044,134 +7430,107 @@ process_packets (GamiManager *mgr)
     return ! g_queue_is_empty (priv->buffer);
 }
 
-static void
-add_action_hook (GamiManager *mgr, gchar *action_id,
-                 GamiResponseHandlerFunc handler_func, gpointer handler_data,
-                 GamiResponseFunc user_func, gpointer user_data)
+static GamiActionHook *
+bool_action_hook_new (GamiBoolResponseFunc user_func, gpointer user_data,
+                      gpointer handler_data)
 {
-    GamiManagerPrivate *priv;
-    GamiActionHook     *hook, *current_hook;
+    GamiActionHook *hook;
 
-    priv = GAMI_MANAGER_PRIVATE (mgr);
     hook = g_new0 (GamiActionHook, 1);
-    current_hook = g_new0 (GamiActionHook, 1);
+    hook->type = GAMI_RESPONSE_TYPE_BOOL;
+    hook->user_data = user_data;
+    hook->user_func.bool_func = user_func;
+    hook->handler_data = handler_data;
 
-    hook->handler_func = current_hook->handler_func = handler_func;
-    hook->handler_data = current_hook->handler_data = handler_data;
-    hook->user_func = current_hook->user_func = user_func;
-    hook->user_data = current_hook->user_data = user_data;
-
-    g_hash_table_insert (priv->action_hooks, action_id, hook);
-    g_hash_table_insert (priv->action_hooks, g_strdup ("current"),
-                         current_hook);
+    return hook;
 }
 
-static GamiResponse *
-action_response (GamiManager *mgr, GIOStatus status, const gchar *action_id,
-                 GError **error)
+static GamiActionHook *
+string_action_hook_new (GamiStringResponseFunc user_func, gpointer user_data,
+                        gpointer handler_data)
+{
+    GamiActionHook *hook;
+
+    hook = g_new0 (GamiActionHook, 1);
+    hook->type = GAMI_RESPONSE_TYPE_STRING;
+    hook->user_data = user_data;
+    hook->user_func.string_func = user_func;
+    hook->handler_data = handler_data;
+
+    return hook;
+}
+
+static GamiActionHook *
+hash_action_hook_new (GamiHashResponseFunc user_func, gpointer user_data)
+{
+    GamiActionHook *hook;
+
+    hook = g_new0 (GamiActionHook, 1);
+    hook->type = GAMI_RESPONSE_TYPE_HASH;
+    hook->user_data = user_data;
+    hook->user_func.hash_func = user_func;
+    hook->handler_data = NULL;
+
+    return hook;
+}
+
+static GamiActionHook *
+list_action_hook_new (GamiListResponseFunc user_func, gpointer user_data,
+                      gpointer handler_data)
+{
+    GamiActionHook *hook;
+
+    hook = g_new0 (GamiActionHook, 1);
+    hook->type = GAMI_RESPONSE_TYPE_LIST;
+    hook->user_data = user_data;
+    hook->user_func.list_func = user_func;
+    hook->handler_data = handler_data;
+
+    return hook;
+}
+
+static void
+add_action_hook (GamiManager *mgr, gchar *action_id, GamiActionHook *hook)
 {
     GamiManagerPrivate *priv;
-    GamiActionHook     *hook;
-    GamiResponse       *response;
 
     priv = GAMI_MANAGER_PRIVATE (mgr);
-
-    hook = g_hash_table_lookup (priv->action_hooks, action_id);
-
-    if (status != G_IO_STATUS_NORMAL || hook->user_func) {
-        GValue      *value;
-
-        value = g_new0 (GValue, 1);
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-
-        g_value_set_boolean (value, status == G_IO_STATUS_NORMAL);
-
-        return gami_response_new (value, NULL, (gchar *) action_id);
-    }
-
-    /* wait for response packet */
-    while (! (response = priv->sync_response))
-        g_main_context_iteration (NULL, FALSE);
-    priv->sync_response = NULL;
-
-    return response;
+        
+    g_hash_table_insert (priv->action_hooks, action_id, hook);
+    g_hash_table_insert (priv->action_hooks, g_strdup ("current"), hook);
 }
 
-static GamiResponse *
+static gboolean
 process_bool_response (GHashTable *packet, gpointer expected)
 {
-    GValue      *value;
-    gchar       *action_id;
-    gchar       *message;
-
-    value = g_new0 (GValue, 1);
-    value = g_value_init (value, G_TYPE_BOOLEAN);
-
-    message = g_hash_table_lookup (packet, "Message");
-    action_id = g_hash_table_lookup (packet, "ActionID");
-
-    if (! check_response (packet, (gchar *) expected))
-        g_value_set_boolean (value, FALSE);
-    else
-        g_value_set_boolean (value, TRUE);
-
-    return gami_response_new (value, message, action_id);
+    return check_response (packet, (gchar *) expected);
 }
 
-static GamiResponse *
+static gchar *
 process_string_response (GHashTable *packet, gpointer return_key)
 {
-    GValue      *value;
-    gchar       *action_id;
-    gchar       *message;
+    if (! check_response (packet, "Success"))
+        return NULL;
 
-    value = g_new0 (GValue, 1);
-    message = g_hash_table_lookup (packet, "Message");
-    action_id = g_hash_table_lookup (packet, "ActionID");
-
-    if (! check_response (packet, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        value = g_value_init (value, G_TYPE_STRING);
-        g_value_set_string (value, g_hash_table_lookup (packet,
-                                                        (gchar *) return_key));
-    }
-
-    return gami_response_new (value, message, action_id);
+    return g_strdup (g_hash_table_lookup (packet, (gchar *) return_key));
 }
 
-static GamiResponse *
-process_hash_response (GHashTable *packet, gpointer unused)
+static GHashTable *
+process_hash_response (GHashTable *packet)
 {
-    GValue      *value;
-    gchar       *message;
-    gchar       *action_id;
+    if (! check_response (packet, "Success"))
+        return NULL;
 
-    value = g_new0 (GValue, 1);
+    g_hash_table_remove (packet, "Response");
+    g_hash_table_remove (packet, "Message");
 
-    message = g_strdup (g_hash_table_lookup (packet, "Message"));
-    action_id = g_hash_table_lookup (packet, "ActionID");
-
-    if (! check_response (packet, "Success")) {
-        value = g_value_init (value, G_TYPE_BOOLEAN);
-        g_value_set_boolean (value, FALSE);
-    } else {
-        g_hash_table_remove (packet, "Response");
-        g_hash_table_remove (packet, "Message");
-
-        value = g_value_init (value, G_TYPE_HASH_TABLE);
-        g_value_set_boxed (value, g_hash_table_ref (packet));
-    }
-
-    return gami_response_new (value, message, action_id);
+    return g_hash_table_ref (packet);
 }
 
-static GamiResponse *
+static GSList *
 process_list_response (GHashTable *packet, gpointer stop_event)
 {
     static GSList *list = NULL;
-    static gchar  *message = NULL;
     gchar         *event;
 
     if (g_hash_table_lookup (packet, "Response")) {
@@ -5183,35 +7542,17 @@ process_list_response (GHashTable *packet, gpointer stop_event)
         }
 
         if (! check_response (packet, "Success"))
-            return process_bool_response (packet, "Success");  /* error */
-
-        if (message)
-            g_free (message);
-        message = g_strdup (g_hash_table_lookup (packet, "Message"));
+            return NULL;   /* FIXME: errors, empty/incomplete lists */
 
         return NULL;
     }
 
     event = g_hash_table_lookup (packet, "Event");
     if (! strcmp (event, (gchar *) stop_event)) {
-        GamiResponse *resp;
-        GValue *value;
+        GSList *resp;
 
-        list = g_slist_reverse (list);
-
-        value = g_new0 (GValue, 1);
-        value = g_value_init (value, G_TYPE_SLIST);
-        g_value_take_boxed (value, g_slist_copy (list));
-
-        resp = gami_response_new (value, message,
-                                  g_hash_table_lookup (packet, "ActionID"));
-
-        /* cleanup */
-        if (message)
-            g_free (message);
-
+        resp = g_slist_reverse (list);
         list = NULL;
-        message = NULL;
 
         return resp;
 
@@ -5223,6 +7564,30 @@ process_list_response (GHashTable *packet, gpointer stop_event)
     }
 
     return NULL; /* list not complete, wait for more packets */
+}
+
+static void
+set_bool_response   (gboolean response, gboolean *store)
+{
+    *store = response;
+}
+
+static void
+set_string_response (gchar *response, gchar **store)
+{
+    *store = response;
+}
+
+static void
+set_hash_response   (GHashTable *response, GHashTable **store)
+{
+    *store = response;
+}
+
+static void
+set_list_response   (GSList *response, GSList **store)
+{
+    *store = response;
 }
 
 static gboolean
