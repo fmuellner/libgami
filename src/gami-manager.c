@@ -394,7 +394,6 @@ gami_manager_login (GamiManager *ami, const gchar *username,
  * @action_id: (allow-none): ActionID to ease response matching
  * @response_func: Callback for asynchronious operation.
  * @response_data: User data to pass to the callback.
- * @user_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
  * Authenticate to asterisk and open a new manager session
@@ -406,7 +405,7 @@ gami_manager_login_async (GamiManager *ami, const gchar *username,
                           const gchar *secret, const gchar *auth_type,
                           GamiEventMask events, const gchar *action_id,
                           GamiBoolResponseFunc response_func,
-                          gpointer user_data, GError **error)
+                          gpointer response_data, GError **error)
 {
     GamiManagerPrivate *priv;
     GString  *action;
@@ -436,7 +435,7 @@ gami_manager_login_async (GamiManager *ami, const gchar *username,
 
     action_id_new = get_action_id (action_id);
     add_action_hook (ami, action_id_new,
-                     bool_action_hook_new (response_func, user_data,
+                     bool_action_hook_new (response_func, response_data,
                                            "Success"));
     g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
 
@@ -454,8 +453,6 @@ gami_manager_login_async (GamiManager *ami, const gchar *username,
  * gami_manager_logoff:
  * @ami: #GamiManager
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation.
- * @response_data: User data to pass to the callback.
  * @error: A location to return an error of type #GIOChannelError
  *
  * Close the manager session and disconnect from asterisk
