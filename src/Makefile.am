@@ -1,28 +1,69 @@
-INCLUDES = -DG_LOG_DOMAIN=\"Gami\"  \
-	   -DGAMI_COMPILATION       \
-	   -DG_DISABLE_DEPRECATED   \
-	   $(GAMI_CFLAGS)
+NULL =
 
-AM_CFLAGS = -Wall -g
+EXTRA_DIST =
+
+DISTCLEANFILES =
+
+GAMI_DEBUG_FLAGS = -Wall -g
+
+AM_CFLAGS =                        \
+	-DG_LOG_DOMAIN=\"Gami\"    \
+	$(GAMI_CFLAGS)             \
+	$(GAMI_DEBUG_FLAGS)        \
+	-DGAMI_COMPILATION         \
+	-DG_DISABLE_DEPRECATED
+
+lib_LTLIBRARIES = libgami-1.0.la
+
+libgami_1_0_la_SOURCES =          \
+        gami-main.c               \
+        gami-main.h               \
+        gami-manager.c            \
+        gami-manager.h            \
+		gami-manager-private.c    \
+		gami-manager-private.h    \
+        gami-enums.h              \
+        gami-enumtypes.c          \
+        gami-enumtypes.h          \
+        $(NULL)
+
+libgami_1_0_la_LDFLAGS = $(GAMI_LIBS)
 
 gamiincludedir=$(includedir)/libgami-1.0
 gamiinclude_HEADERS = gami.h
 
+gami_headers =                    \
+	gami-main.h               \
+	gami-manager.h            \
+	gami-enums.h              \
+	$(NULL)
+
 gamisubincludedir=$(gamiincludedir)/gami
-gamisubinclude_HEADERS = gami-main.h gami-manager.h
+gamisubinclude_HEADERS =          \
+	$(gami_headers)           \
+	gami-enumtypes.h          \
+	$(NULL)
 
-lib_LTLIBRARIES = libgami-1.0.la
 
-libgami_1_0_la_SOURCES = gami-main.c      \
-			 gami-manager.c
+BUILT_SOURCES =                   \
+        gami-enumtypes.h          \
+        gami-enumtypes.c          \
+        $(NULL)
 
-libgami_1_0_la_LDFLAGS = $(GAMI_LIBS)
+EXTRA_DIST +=                     \
+        gami-enumtypes.h.template \
+        gami-enumtypes.c.template \
+        $(NULL)
 
-BUILT_GIRSOURCES = GAmi-1.0.gir
+gami-enumtypes.h: gami-enumtypes.h.template
+	glib-mkenums --template $< $(gami_headers) >$@.tmp && mv $@.tmp $@
+
+gami-enumtypes.c: gami-enumtypes.c.template
+	glib-mkenums --template $< $(gami_headers) >$@.tmp && mv $@.tmp $@
 
 if ENABLE_INTROSPECTION
 
-GAmi-1.0.gir: $(libgami_1_0_la_SOURCES) libgami-1.0.la $(G_IR_SCANNER)
+GAmi-1.0.gir: libgami-1.0.la Makefile gami.h
 	$(G_IR_SCANNER) -v --namespace GAmi --nsversion=1.0 \
 		--add-include-path=$(top_srcdir)/src --add-include-path=. \
 		--include=GObject-2.0 \
@@ -30,20 +71,20 @@ GAmi-1.0.gir: $(libgami_1_0_la_SOURCES) libgami-1.0.la $(G_IR_SCANNER)
 		--libtool="$(LIBTOOL)" \
 		--output $@ \
 		--pkg gobject-2.0 \
+		--pkg gio-2.0 \
 		-I$(top_srcdir)/src \
 		$(GAMI_CFLAGS) \
 		-DGAMI_COMPILATION \
-		$(gamisubinclude_HEADERS:%=$(top_srcdir)/src/%) \
-		$(libgami_1_0_la_SOURCES:%=$(top_srcdir)/src/%)
+		$(gamisubinclude_HEADERS:%=$(top_srcdir)/src/%)
 
 girdir = $(GIRDIR)
-gir_DATA = $(BUILT_GIRSOURCES)
+gir_DATA = GAmi-1.0.gir
 
 typelibdir = $(TYPELIBDIR)
-typelib_DATA = $(BUILT_GIRSOURCES:.gir=.typelib)
+typelib_DATA = GAmi-1.0.typelib
 
-EXTRA_DIST = $(gir_DATA) $(typelib_DATA)
-DISTCLEANFILES = $(gir_DATA) $(typelib_DATA)
+EXTRA_DIST += $(gir_DATA)
+DISTCLEANFILES += $(gir_DATA) $(typelib_DATA)
 
 %.typelib: %.gir $(G_IR_COMPILER)
 	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}.libs \
