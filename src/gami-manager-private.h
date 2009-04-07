@@ -53,6 +53,9 @@ typedef GSList *(*GamiListFinishFunc) (GamiManager *,
                                        GAsyncResult *,
                                        GError **);
 
+/* FIXME: _must_ we expose this one? */
+void add_action_hook (GamiManager *mgr, gchar *action_id, GamiActionHook *hook);
+
 /* initialize action hooks */
 GamiActionHook *bool_action_hook_new (GAsyncResult *result,
                                       gpointer handler_data);
@@ -123,4 +126,19 @@ send_async_action (GamiManager *ami,
                    const gchar *action_name,
                    const gchar *first_param_name,
                    ...);
+
+void
+setup_action_hook (GamiManager *ami,
+                   GamiAsyncFunc func,
+                   GamiResponseType type,
+                   gpointer handler_data,
+                   gchar *action_id,
+                   GAsyncReadyCallback callback,
+                   gpointer user_data,
+                   GError *error);
+
+void
+send_action_string (const gchar *action,
+                    GIOChannel *channel,
+                    GError **error);
 #endif

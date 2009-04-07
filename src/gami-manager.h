@@ -1217,7 +1217,6 @@ gboolean gami_manager_events_finish (GamiManager *ami,
                                      GAsyncResult *result,
                                      GError **error);
 
-/*
 gboolean gami_manager_user_event (GamiManager *ami,
                                   const gchar *user_event,
 								  const GHashTable *headers,
@@ -1232,7 +1231,6 @@ void gami_manager_user_event_async (GamiManager *ami,
 gboolean gami_manager_user_event_finish (GamiManager *ami,
                                          GAsyncResult *result,
                                          GError **error);
-                                         */
 
 gboolean gami_manager_wait_event (GamiManager *ami,
                                   guint timeout,

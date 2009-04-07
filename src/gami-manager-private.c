@@ -10,7 +10,7 @@ static gchar *set_action_id (const gchar *action_id);
 static gpointer wait_pointer_result (GamiManager *ami,
                                      GamiPointerFinishFunc finish,
                                      GError **error);
-static void add_action_hook (GamiManager *manager, gchar *action_id,
+/*static */void add_action_hook (GamiManager *manager, gchar *action_id,
                              GamiActionHook *hook);
 
 static gpointer
@@ -216,6 +216,69 @@ list_action_finish (GamiManager *ami,
     return (GSList *) pointer_action_finish (ami, result, func, error);
 }
 
+void
+send_action_string (const gchar *action,
+                    GIOChannel *channel,
+                    GError **error)
+{
+    GIOStatus status;
+
+    g_assert (error == NULL || *error == NULL);
+
+    while (G_IO_STATUS_AGAIN == (status = g_io_channel_write_chars (channel,
+                                                                    action,
+                                                                    -1,
+                                                                    NULL,
+                                                                    error)));
+    if (status != G_IO_STATUS_ERROR)
+        while (G_IO_STATUS_AGAIN == g_io_channel_flush (channel,
+                                                        error));
+}
+
+void
+setup_action_hook (GamiManager *ami,
+                   GamiAsyncFunc func,
+                   GamiResponseType type,
+                   gpointer handler_data,
+                   gchar *action_id,
+                   GAsyncReadyCallback callback,
+                   gpointer user_data,
+                   GError *error)
+{
+    if (error) {
+        g_simple_async_report_gerror_in_idle (G_OBJECT (ami),
+                                              callback,
+                                              user_data,
+                                              error);
+        g_error_free (error);
+        g_free (action_id);
+    } else {
+        GamiActionHook *hook = NULL;
+        GSimpleAsyncResult *simple = g_simple_async_result_new (G_OBJECT (ami),
+                                                                callback,
+                                                                user_data,
+                                                                func);
+        switch (type) {
+            case GAMI_RESPONSE_TYPE_BOOL:
+                hook = bool_action_hook_new (G_ASYNC_RESULT (simple),
+                                             handler_data);
+                break;
+            case GAMI_RESPONSE_TYPE_STRING:
+                hook = string_action_hook_new (G_ASYNC_RESULT (simple),
+                                               handler_data);
+                break;
+            case GAMI_RESPONSE_TYPE_HASH:
+                hook = hash_action_hook_new (G_ASYNC_RESULT (simple));
+                break;
+            case GAMI_RESPONSE_TYPE_LIST:
+                hook = list_action_hook_new (G_ASYNC_RESULT (simple),
+                                             handler_data);
+                break;
+        }
+        add_action_hook (ami, action_id, hook);
+    }
+}
+
 static void send_async_action_valist (GamiManager *ami,
                                GamiAsyncFunc func,
                                GamiResponseType type,
@@ -240,7 +303,6 @@ send_async_action_valist (GamiManager *ami,
     GamiManagerPrivate *priv;
     gchar *action, *action_id = NULL;
     GError *error = NULL;
-    GSimpleAsyncResult *simple;
 
     g_return_if_fail (GAMI_IS_MANAGER (ami));
     g_return_if_fail (callback != NULL);
@@ -256,49 +318,18 @@ send_async_action_valist (GamiManager *ami,
                                          first_param_name,
                                          varargs);
 
-    while ((G_IO_STATUS_AGAIN == g_io_channel_write_chars (priv->socket,
-                                                           action,
-                                                           -1,
-                                                           NULL,
-                                                           &error)));
-    if (! error)
-        while (G_IO_STATUS_AGAIN == g_io_channel_flush (priv->socket,
-                                                        &error));
+    send_action_string (action, priv->socket, &error);
 
     g_debug ("GAMI command sent");
 
-    if (error) {
-        g_simple_async_report_gerror_in_idle (G_OBJECT (ami),
-                                              callback,
-                                              user_data,
-                                              error);
-        g_error_free (error);
-        g_free (action_id);
-    } else {
-        GamiActionHook *hook = NULL;
-        simple = g_simple_async_result_new (G_OBJECT (ami),
-                                            callback,
-                                            user_data,
-                                            func);
-        switch (type) {
-            case GAMI_RESPONSE_TYPE_BOOL:
-                hook = bool_action_hook_new (G_ASYNC_RESULT (simple),
-                                             handler_data);
-                break;
-            case GAMI_RESPONSE_TYPE_STRING:
-                hook = string_action_hook_new (G_ASYNC_RESULT (simple),
-                                               handler_data);
-                break;
-            case GAMI_RESPONSE_TYPE_HASH:
-                hook = hash_action_hook_new (G_ASYNC_RESULT (simple));
-                break;
-            case GAMI_RESPONSE_TYPE_LIST:
-                hook = list_action_hook_new (G_ASYNC_RESULT (simple),
-                                             handler_data);
-                break;
-        }
-        add_action_hook (ami, action_id, hook);
-    }
+    setup_action_hook (ami,
+                       func,
+                       type,
+                       handler_data,
+                       action_id,
+                       callback,
+                       user_data,
+                       error);
     g_free (action);
 }
 

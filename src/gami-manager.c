@@ -5815,7 +5815,6 @@ gami_manager_events_finish (GamiManager *ami,
 }
 
 
-#if 0
 /**
  * gami_manager_user_event:
  * @ami: #GamiManager
@@ -5863,13 +5862,11 @@ gami_manager_user_event_async (GamiManager *ami,
                                GAsyncReadyCallback callback,
                                gpointer user_data)
 {
+    /* FIXME: organize the internal API to handle this more gracefully */
     GamiManagerPrivate *priv;
-    GString   *action;
-    gchar     *action_str;
-    gchar     *action_id_new;
-    GIOStatus  iostatus;
+    gchar *action, *action_complete = NULL, *action_id_new = NULL;
+    GError *error = NULL;
 
-    g_assert (error == NULL || *error == NULL);
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
     g_assert (user_event != NULL);
 
@@ -5877,8 +5874,11 @@ gami_manager_user_event_async (GamiManager *ami,
 
     g_assert (priv->connected == TRUE);
 
-    action = g_string_new ("Action: UserEvent\r\n");
-    g_string_append_printf (action, "UserEvent: %s\r\n", user_event);
+    action = build_action_string ("UserEvent",
+                                  &action_id_new,
+                                  "UserEvent", user_event,
+                                  "ActionID", action_id,
+                                  NULL);
 
     if (headers) {
         GString *header = g_string_new ("");
@@ -5887,26 +5887,39 @@ gami_manager_user_event_async (GamiManager *ami,
         g_hash_table_foreach ((GHashTable *) headers,
                               (GHFunc) join_user_event_headers, header);
         header_str = g_string_free (header, FALSE);
-        g_string_append_printf (action, "%s", header_str);
+        action_complete = g_strjoin (header_str, action, NULL);
         g_free (header_str);
-    }
+    } else
+        action_complete = g_strdup (action);
 
-    action_id_new = get_action_id (action_id);
-    add_action_hook (ami, action_id_new,
-                     bool_action_hook_new (response_func, response_data,
-                                           "Success"));
-    g_string_append_printf (action, "ActionID: %s\r\n", action_id_new);
+    g_free (action);
 
-    g_string_append (action, "\r\n");
+    send_action_string (action_complete, priv->socket, &error);
 
-    action_str = g_string_free (action, FALSE);
+    g_debug ("GAMI command sent");
 
-    iostatus = send_command (priv->socket, action_str, error);
-    g_free (action_str);
-
-    return iostatus;
+    setup_action_hook (ami,
+                       (GamiAsyncFunc) gami_manager_user_event_async,
+                       GAMI_RESPONSE_TYPE_BOOL,
+                       "Success",
+                       action_id_new,
+                       callback,
+                       user_data,
+                       error);
+    g_free (action_complete);
 }
-#endif
+
+gboolean
+gami_manager_user_event_finish (GamiManager *ami,
+                                GAsyncResult *result,
+                                GError **error)
+{
+    return bool_action_finish (ami,
+                               result,
+                               (GamiAsyncFunc) gami_manager_user_event_async,
+                               error);
+}
+
 
 /**
  * gami_manager_wait_event:
