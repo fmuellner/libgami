@@ -78,7 +78,7 @@ AC_PROG_LIBTOOL
 ##################################################
 
 GLIB_REQ=2.16
-PKG_CHECK_MODULES([GAMI], [glib-2.0 >= $GLIB_REQ gobject-2.0])
+PKG_CHECK_MODULES([GAMI], [glib-2.0 >= $GLIB_REQ gobject-2.0 gio-2.0])
 
 
 ##################################################
