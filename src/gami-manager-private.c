@@ -675,3 +675,89 @@ reconnect_socket (GamiManager *ami)
                                                     failed */
 }
 
+GamiPacket *
+gami_packet_new (const gchar *raw_text)
+{
+    GamiPacket *pkt;
+
+    pkt = g_new0 (GamiPacket, 1);
+    pkt->raw = g_strdup (raw_text);
+    pkt->parsed = NULL;
+    pkt->handled = FALSE;
+
+    return pkt;
+}
+
+GamiHookData *
+gami_hook_data_new (GAsyncResult *result, gpointer handler_data)
+{
+    GamiHookData *data;
+
+    data = g_new0 (GamiHookData, 1);
+    data->packet = NULL;
+    data->result = result;
+    data->handler_data = handler_data;
+
+    return data;
+}
+
+/* hook functions */
+
+/* parse raw packet string into hash table */
+gboolean
+parse_packet (gpointer data)
+{
+    GamiPacket *pkt;
+    gchar **lines, *line;
+
+    pkt = ((GamiHookData *) data)->packet;
+
+    g_return_val_if_fail (pkt->raw != NULL, TRUE);
+    g_return_val_if_fail (pkt->parsed == NULL, TRUE);
+
+    pkt->parsed = g_hash_table_new_full (g_str_hash,
+                                         g_str_equal,
+                                         g_free,
+                                         g_free);
+
+    lines = g_strsplit (pkt->raw, "\r\n", -1);
+    for (line = *lines; line; line++) {
+        gchar **tokens;
+
+        tokens = g_strsplit (line, ": ", 2);
+        if (g_strv_length (tokens) == 2) {
+            gchar *key, *value;
+
+            key = g_strdup (tokens [0]);
+            value = g_strdup (tokens [1]);
+
+            g_hash_table_insert (pkt->parsed, key, value);
+        }
+        g_strfreev (tokens);
+    }
+    g_strfreev (lines);
+
+    return TRUE;
+}
+
+/* emit event */
+gboolean
+emit_event (gpointer data)
+{
+    GamiManager *ami;
+    GHashTable  *pkt;
+
+    pkt = ((GamiHookData *) data)->packet->parsed;
+    ami = (GamiManager *) ((GamiHookData *) data)->handler_data;
+
+    g_return_val_if_fail (pkt != NULL, TRUE);
+    g_return_val_if_fail (ami != NULL && GAMI_IS_MANAGER (ami), TRUE);
+
+    if (g_hash_table_lookup (pkt, "Response")
+        || g_hash_table_lookup (pkt, "ActionID"))
+        return TRUE;
+
+    g_signal_emit (ami, signals [EVENT], 0, pkt);
+
+    return TRUE;
+}

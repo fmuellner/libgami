@@ -16,6 +16,9 @@ struct _GamiManagerPrivate
     GHashTable *action_hooks;
     GQueue *buffer;
 
+    GHookList *packet_hooks;
+    GQueue *packet_buffer;
+
     GAsyncResult *sync_result;
 };
 
@@ -48,6 +51,25 @@ enum {
 
 static guint signals [LAST_SIGNAL];
 
+typedef struct _GamiPacket GamiPacket;
+struct _GamiPacket {
+	gchar *raw;
+	GHashTable *parsed;
+	gboolean handled;
+};
+
+GamiPacket *
+gami_packet_new (const gchar *raw_text);
+
+typedef struct _GamiHookData GamiHookData;
+struct _GamiHookData {
+	GamiPacket *packet;
+	GAsyncResult *result;
+	gpointer handler_data;
+};
+
+GamiHookData *
+gami_hook_data_new (GAsyncResult *result, gpointer handler_data);
 
 /* prototypes for finish functions of asynchronous actions */
 typedef gboolean (*GamiBoolFinishFunc) (GamiManager *,
