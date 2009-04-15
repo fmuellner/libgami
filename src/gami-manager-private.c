@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
 #include <gami-manager-private.h>
 
 typedef gpointer (*GamiPointerFinishFunc) (GamiManager *,
@@ -422,3 +424,254 @@ add_action_hook (GamiManager *mgr, gchar *action_id, GamiActionHook *hook)
     g_hash_table_insert (priv->action_hooks, g_strdup ("current"),
                          g_memdup (hook, sizeof (GamiActionHook)));
 }
+
+gboolean
+dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
+{
+    GamiManagerPrivate *priv;
+    GIOStatus           status = G_IO_STATUS_NORMAL;
+
+    priv = GAMI_MANAGER_PRIVATE (mgr);
+
+    if (cond & (G_IO_IN | G_IO_PRI)) {
+        GError *error  = NULL;
+
+        do {
+            static GHashTable *packet = NULL;
+            gchar             *line;
+
+            status = g_io_channel_read_line (chan, &line, NULL, NULL, &error);
+
+            if (status == G_IO_STATUS_NORMAL) {
+                gchar **tokens;
+
+                if (! packet) {
+                    packet = g_hash_table_new_full (g_str_hash, g_str_equal,
+                                                    g_free, g_free);
+
+                    g_debug ("Reveiving an GAMI packet");
+                }
+
+                tokens = g_strsplit (line, ": ", 2);
+                if (g_strv_length (tokens) == 2) {
+                    gchar *key, *value;
+
+                    key = g_strdup (g_strchomp (tokens [0]));
+                    value = g_strdup (g_strchomp (tokens [1]));
+
+                    g_debug ("   %s: %s", key, value);
+
+                    g_hash_table_insert (packet, key, value);
+                }
+                g_strfreev (tokens);
+
+                if (g_str_has_prefix (line, "\r\n")) {
+                    g_debug ("GAMI packet received.");
+
+                    g_queue_push_tail (priv->buffer, packet);
+                    packet = NULL;
+                }
+            }
+
+            g_free (line);
+
+        } while (g_io_channel_get_buffer_condition (chan) & G_IO_IN);
+
+        if (status == G_IO_STATUS_ERROR) {
+            g_warning ("An error occurred during package reception%s%s\n",
+                       error ? ": " : "",
+                       error ? error->message : "");
+            if (error)
+                g_error_free (error);
+        }
+
+        if (! g_queue_is_empty (priv->buffer))
+            g_timeout_add (0, (GSourceFunc) process_packets, mgr);
+    }
+
+    if (cond & (G_IO_HUP | G_IO_ERR) || status == G_IO_STATUS_EOF) {
+
+        priv->connected = FALSE;
+        g_signal_emit (mgr, signals [DISCONNECTED], 0);
+        g_idle_add ((GSourceFunc) reconnect_socket, mgr);
+
+        return FALSE;
+
+    }
+
+    return TRUE;
+}
+
+gboolean
+process_packets (GamiManager *mgr)
+{
+    GamiManagerPrivate *priv;
+    GHashTable         *packet;
+    gchar              *action_id;
+
+    priv = GAMI_MANAGER_PRIVATE (mgr);
+
+    if (! (packet = g_queue_pop_head (priv->buffer)))
+		return FALSE;
+
+    action_id = g_hash_table_lookup (packet, "ActionID");
+    if (action_id || g_hash_table_lookup (packet, "Response")) {
+        GamiActionHook *hook;
+
+        hook = action_id ? g_hash_table_lookup (priv->action_hooks, action_id)
+                         : g_hash_table_lookup (priv->action_hooks, "current");
+        if (hook) {
+            GSimpleAsyncResult *simple = G_SIMPLE_ASYNC_RESULT (hook->result);
+
+            switch (hook->type) {
+                gboolean    bool_resp;
+                gchar      *str_resp;
+                GHashTable *hash_resp;
+                GSList     *list_resp;
+
+                case GAMI_RESPONSE_TYPE_BOOL:
+                    bool_resp = process_bool_response (packet,
+                                                       hook->handler_data);
+                    g_simple_async_result_set_op_res_gboolean (simple,
+                                                               bool_resp);
+                    break;
+                case GAMI_RESPONSE_TYPE_STRING:
+                    str_resp = process_string_response (packet,
+                                                        hook->handler_data);
+                    g_simple_async_result_set_op_res_gpointer (simple,
+                                                               str_resp,
+                                                               g_free);
+                    break;
+                case GAMI_RESPONSE_TYPE_HASH:
+                    hash_resp = process_hash_response (packet);
+                    g_simple_async_result_set_op_res_gpointer (simple,
+                                                               hash_resp,
+                                                               (GDestroyNotify) g_hash_table_unref);
+                    break;
+                case GAMI_RESPONSE_TYPE_LIST:
+                    list_resp = NULL;
+                    if (! process_list_response (packet, hook->handler_data,
+                                                 &list_resp))
+                        return ! g_queue_is_empty (priv->buffer);
+
+                    g_simple_async_result_set_op_res_gpointer (simple,
+                                                               list_resp,
+                                                               (GDestroyNotify) g_slist_free);
+                    break;
+            }
+            g_simple_async_result_complete_in_idle (simple);
+            if (action_id)
+                g_hash_table_remove (priv->action_hooks, action_id);
+            g_hash_table_remove (priv->action_hooks, "current");
+        }
+    } else if (g_hash_table_lookup (packet, "Event"))
+        g_signal_emit (mgr, signals [EVENT], 0, packet);
+
+    return ! g_queue_is_empty (priv->buffer);
+}
+
+gboolean
+process_bool_response (GHashTable *packet, gpointer expected)
+{
+    return check_response (packet, (gchar *) expected);
+}
+
+gchar *
+process_string_response (GHashTable *packet, gpointer return_key)
+{
+    if (! check_response (packet, "Success"))
+        return NULL;
+
+    return g_strdup (g_hash_table_lookup (packet, (gchar *) return_key));
+}
+
+GHashTable *
+process_hash_response (GHashTable *packet)
+{
+    if (! check_response (packet, "Success"))
+        return NULL;
+
+    g_hash_table_remove (packet, "Response");
+    g_hash_table_remove (packet, "Message");
+
+    return g_hash_table_ref (packet);
+}
+
+gboolean
+process_list_response (GHashTable *packet, gpointer stop_event, GSList **resp)
+{
+    static GSList *list = NULL;
+    gchar         *event;
+
+    if (g_hash_table_lookup (packet, "Response")) {
+        if (list) {              /* clean up left overs */
+            g_slist_foreach (list, (GFunc) g_hash_table_destroy, NULL);
+            g_slist_free (list);
+
+            list = NULL;
+        }
+
+        if (! check_response (packet, "Success"))
+            return TRUE;   /* FIXME: errors, empty lists */
+
+        return FALSE;
+    }
+
+    event = g_hash_table_lookup (packet, "Event");
+    if (! strcmp (event, (gchar *) stop_event)) {
+
+        *resp = g_slist_reverse (list);
+        list = NULL;
+
+        return TRUE;
+
+    } else {
+        if (event)
+            g_hash_table_remove (packet, "Event");
+
+        list = g_slist_prepend (list, g_hash_table_ref (packet));
+    }
+
+    return FALSE; /* list not complete, wait for more packets */
+}
+
+void
+set_sync_result (GObject *source, GAsyncResult *result, gpointer user_data)
+{
+    GamiManager        *ami;
+    GamiManagerPrivate *priv;
+
+    ami = GAMI_MANAGER (source);
+    priv = GAMI_MANAGER_PRIVATE (ami);
+
+    priv->sync_result = g_object_ref (result);
+}
+
+gboolean
+check_response (GHashTable *pkt, const gchar *value)
+{
+    g_return_val_if_fail (pkt != NULL, FALSE);
+    g_return_val_if_fail (value != NULL, FALSE);
+
+    if (g_strcmp0 (g_hash_table_lookup (pkt, "Response"), value) != 0) {
+        return FALSE;
+    }
+    return TRUE;
+}
+
+gboolean
+reconnect_socket (GamiManager *ami)
+{
+    GamiManagerPrivate *priv;
+    GError *error = NULL;
+
+    priv = GAMI_MANAGER_PRIVATE (ami);
+
+    close (g_io_channel_unix_get_fd (priv->socket));
+    g_io_channel_shutdown (priv->socket, TRUE, NULL);
+    g_io_channel_unref (priv->socket);
+
+    return ! gami_manager_connect (ami, &error); /* try again if connection
+                                                    failed */
+}
+

@@ -39,6 +39,16 @@ struct _GamiActionHook
     GAsyncResult *result;
 };
 
+enum {
+    CONNECTED,
+    DISCONNECTED,
+    EVENT,
+    LAST_SIGNAL
+};
+
+static guint signals [LAST_SIGNAL];
+
+
 /* prototypes for finish functions of asynchronous actions */
 typedef gboolean (*GamiBoolFinishFunc) (GamiManager *,
                                         GAsyncResult *,
@@ -52,6 +62,11 @@ typedef GHashTable *(*GamiHashFinishFunc) (GamiManager *,
 typedef GSList *(*GamiListFinishFunc) (GamiManager *,
                                        GAsyncResult *,
                                        GError **);
+
+gboolean dispatch_ami (GIOChannel *chan,
+                              GIOCondition cond,
+                              GamiManager *ami);
+gboolean process_packets (GamiManager *manager);
 
 /* FIXME: _must_ we expose this one? */
 void add_action_hook (GamiManager *mgr, gchar *action_id, GamiActionHook *hook);
@@ -141,4 +156,18 @@ void
 send_action_string (const gchar *action,
                     GIOChannel *channel,
                     GError **error);
+/* internal response functions to feed callbacks */
+gboolean process_bool_response (GHashTable *packet, gpointer expected);
+gchar *process_string_response (GHashTable *packet, gpointer return_key);
+GHashTable *process_hash_response (GHashTable *packet);
+gboolean process_list_response (GHashTable *packet,
+                                gpointer stop_event, GSList **resp);
+
+/* response callbacks used internally in synchronous mode */
+void set_sync_result (GObject *ami, GAsyncResult *result, gpointer data);
+gboolean check_response (GHashTable *p, const gchar *expected_value);
+
+
+gboolean reconnect_socket (GamiManager *ami);
+
 #endif
