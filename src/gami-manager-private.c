@@ -502,6 +502,44 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *mgr)
     return TRUE;
 }
 
+void
+set_current_packet (GHook *hook, gpointer packet)
+{
+    GamiHookData *data;
+
+    data = (GamiHookData *) hook->data;
+    data->packet = (GamiPacket *) packet;
+}
+
+void
+free_packet (GamiPacket *packet)
+{
+    g_return_if_fail (packet != NULL);
+
+    if (packet->parsed)
+        g_hash_table_unref (packet->parsed);
+    g_free (packet->raw);
+    g_free (packet);
+}
+
+gboolean
+process_packets_new (GamiManager *mgr)
+{
+    GamiManagerPrivate *priv;
+    GamiPacket         *packet;
+
+    priv = GAMI_MANAGER_PRIVATE (mgr);
+
+    if (! (packet = g_queue_pop_head (priv->packet_buffer)))
+        return FALSE;
+
+    g_hook_list_marshal (priv->packet_hooks, FALSE, set_current_packet, packet);
+    g_hook_list_invoke_check (priv->packet_hooks, FALSE);
+    free_packet (packet);
+
+    return ! g_queue_is_empty (priv->packet_buffer);
+}
+
 gboolean
 process_packets (GamiManager *mgr)
 {
