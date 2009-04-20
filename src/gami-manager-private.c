@@ -689,16 +689,26 @@ gami_packet_new (const gchar *raw_text)
 }
 
 GamiHookData *
-gami_hook_data_new (GAsyncResult *result, gpointer handler_data)
+gami_hook_data_new (GAsyncResult *result,
+                    gchar *action_id,
+                    gpointer handler_data)
 {
     GamiHookData *data;
 
     data = g_new0 (GamiHookData, 1);
     data->packet = NULL;
     data->result = result;
+    data->action_id = action_id;
     data->handler_data = handler_data;
 
     return data;
+}
+
+void
+free_list_result (GSList *list)
+{
+    g_slist_foreach (list, (GFunc) g_hash_table_unref, NULL);
+    g_slist_free (list);
 }
 
 /* hook functions */
@@ -760,4 +770,180 @@ emit_event (gpointer data)
     g_signal_emit (ami, signals [EVENT], 0, pkt);
 
     return TRUE;
+}
+
+gboolean
+bool_hook (gpointer data)
+{
+    GHashTable *pkt;
+    gchar *response, *action_id, *message;
+    GSimpleAsyncResult *simple;
+    gboolean success;
+
+    pkt = ((GamiHookData *) data)->packet->parsed;
+
+    g_return_val_if_fail (pkt != NULL, TRUE);
+
+    response = g_hash_table_lookup (pkt, "Response");
+
+    g_return_val_if_fail (response, TRUE);
+
+    action_id = g_hash_table_lookup (pkt, "ActionID");
+    if (action_id
+        && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
+        return TRUE;
+
+    success = ! g_strcmp0 (response, ((GamiHookData *) data)->handler_data);
+    message = g_hash_table_lookup (pkt, "Message");
+
+    simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
+
+    if (success)
+        g_simple_async_result_set_op_res_gboolean (simple, success);
+    else
+        g_simple_async_result_set_error (simple,
+                                         G_IO_ERROR,
+                                         42,
+                                         message ?  message : "Action failed");
+
+    g_simple_async_result_complete_in_idle (simple);
+
+    return FALSE;
+}
+
+gboolean
+string_hook (gpointer data)
+{
+    GHashTable *pkt;
+    gchar *response, *result, *action_id, *message;
+    GSimpleAsyncResult *simple;
+
+    pkt = ((GamiHookData *) data)->packet->parsed;
+
+    g_return_val_if_fail (pkt != NULL, TRUE);
+
+    response = g_hash_table_lookup (pkt, "Response");
+
+    g_return_val_if_fail (response, TRUE);
+
+    action_id = g_hash_table_lookup (pkt, "ActionID");
+    if (action_id
+        && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
+        return TRUE;
+
+    result = g_hash_table_lookup (pkt, ((GamiHookData *) data)->handler_data);
+    message = g_hash_table_lookup (pkt, "Message");
+
+    simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
+
+    if (! g_strcmp0 (g_hash_table_lookup (pkt, "Response"), "Success")
+        && result)
+        g_simple_async_result_set_op_res_gpointer (simple,
+                                                   g_strdup (result),
+                                                   g_free);
+    else
+        g_simple_async_result_set_error (simple,
+                                         G_IO_ERROR,
+                                         42,
+                                         message ?  message : "Action failed");
+    return FALSE;
+}
+
+gboolean
+hash_hook (gpointer data)
+{
+    GHashTable *pkt;
+    gchar *response, *action_id, *message;
+    GSimpleAsyncResult *simple;
+
+    pkt = ((GamiHookData *) data)->packet->parsed;
+
+    g_return_val_if_fail (pkt != NULL, TRUE);
+
+    response = g_hash_table_lookup (pkt, "Response");
+
+    g_return_val_if_fail (response, TRUE);
+
+    action_id = g_hash_table_lookup (pkt, "ActionID");
+    if (action_id
+        && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
+        return TRUE;
+
+    message = g_hash_table_lookup (pkt, "Message");
+
+    simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
+
+    if (! g_strcmp0 (g_hash_table_lookup (pkt, "Response"), "Success")) {
+        GDestroyNotify hash_free = (GDestroyNotify) g_hash_table_unref;
+
+        g_hash_table_remove (pkt, "Response");
+        g_hash_table_remove (pkt, "Message");
+        g_simple_async_result_set_op_res_gpointer (simple,
+                                                   g_hash_table_ref (pkt),
+                                                   hash_free);
+    } else
+        g_simple_async_result_set_error (simple,
+                                         G_IO_ERROR,
+                                         42,
+                                         message ?  message : "Action failed");
+    return FALSE;
+}
+
+gboolean
+list_hook (gpointer data)
+{
+    GHashTable *pkt;
+    gchar *response, *action_id;
+    GSimpleAsyncResult *simple;
+
+    pkt = ((GamiHookData *) data)->packet->parsed;
+
+    g_return_val_if_fail (pkt != NULL, TRUE);
+
+    action_id = g_hash_table_lookup (pkt, "ActionID");
+    if (action_id
+        && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
+        return TRUE;
+
+    simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
+
+    if ((response = g_hash_table_lookup (pkt, "Response"))) {
+        gchar *message;
+        gboolean success;
+
+        success = ! g_strcmp0 (response, "Success");
+        message = g_hash_table_lookup (pkt, "Message");
+
+        if (success) {
+            return TRUE;
+        } else {
+            g_simple_async_result_set_error (simple,
+                                             G_IO_ERROR,
+                                             42,
+                                             message ? message
+                                                     : "Action failed");
+            return FALSE;
+        }
+
+    } else {
+        GSList *list;
+        gchar *event;
+        gboolean finished;
+        GDestroyNotify list_free = (GDestroyNotify) free_list_result;
+
+        event = g_hash_table_lookup (pkt, "Event");
+        list = (GSList *) g_simple_async_result_get_op_res_gpointer (simple);
+        finished = ! g_strcmp0 (event, ((GamiHookData *) data)->handler_data);
+
+        if (finished)
+            list = g_slist_reverse (list);
+        else {
+            g_hash_table_remove (pkt, "Event");
+            list = g_slist_prepend (list, g_hash_table_ref (pkt));
+        }
+
+        g_simple_async_result_set_op_res_gpointer (simple, list, list_free);
+
+        return finished;
+    }
 }

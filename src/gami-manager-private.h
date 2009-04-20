@@ -65,11 +65,14 @@ typedef struct _GamiHookData GamiHookData;
 struct _GamiHookData {
 	GamiPacket *packet;
 	GAsyncResult *result;
+    gchar *action_id;
 	gpointer handler_data;
 };
 
 GamiHookData *
-gami_hook_data_new (GAsyncResult *result, gpointer handler_data);
+gami_hook_data_new (GAsyncResult *result,
+                    gchar *action_id,
+                    gpointer handler_data);
 
 /* prototypes for finish functions of asynchronous actions */
 typedef gboolean (*GamiBoolFinishFunc) (GamiManager *,
