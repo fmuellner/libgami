@@ -840,8 +840,8 @@ bool_hook (gpointer data)
         g_simple_async_result_set_op_res_gboolean (simple, success);
     else
         g_simple_async_result_set_error (simple,
-                                         G_IO_ERROR,
-                                         42,
+                                         GAMI_ERROR,
+                                         GAMI_ERROR_FAILED,
                                          message ?  message : "Action failed");
 
     g_simple_async_result_complete_in_idle (simple);
@@ -881,8 +881,8 @@ string_hook (gpointer data)
                                                    g_free);
     else
         g_simple_async_result_set_error (simple,
-                                         G_IO_ERROR,
-                                         42,
+                                         GAMI_ERROR,
+                                         GAMI_ERROR_FAILED,
                                          message ?  message : "Action failed");
     return FALSE;
 }
@@ -921,8 +921,8 @@ hash_hook (gpointer data)
                                                    hash_free);
     } else
         g_simple_async_result_set_error (simple,
-                                         G_IO_ERROR,
-                                         42,
+                                         GAMI_ERROR,
+                                         GAMI_ERROR_FAILED,
                                          message ?  message : "Action failed");
     return FALSE;
 }
@@ -956,8 +956,8 @@ list_hook (gpointer data)
             return TRUE;
         } else {
             g_simple_async_result_set_error (simple,
-                                             G_IO_ERROR,
-                                             42,
+                                             GAMI_ERROR,
+                                             GAMI_ERROR_FAILED,
                                              message ? message
                                                      : "Action failed");
             return FALSE;

@@ -20,11 +20,13 @@ libgami_1_0_la_SOURCES =          \
         gami-main.h               \
         gami-manager.c            \
         gami-manager.h            \
-		gami-manager-private.c    \
-		gami-manager-private.h    \
+        gami-manager-private.c    \
+        gami-manager-private.h    \
         gami-enums.h              \
         gami-enumtypes.c          \
         gami-enumtypes.h          \
+	gami-error.c              \
+	gami-error.h              \
         $(NULL)
 
 libgami_1_0_la_LDFLAGS = $(GAMI_LIBS)
@@ -36,6 +38,7 @@ gami_headers =                    \
 	gami-main.h               \
 	gami-manager.h            \
 	gami-enums.h              \
+	gami-error.h              \
 	$(NULL)
 
 gamisubincludedir=$(gamiincludedir)/gami
@@ -55,10 +58,10 @@ EXTRA_DIST +=                     \
         gami-enumtypes.c.template \
         $(NULL)
 
-gami-enumtypes.h: gami-enumtypes.h.template
+gami-enumtypes.h: $(gami_headers) gami-enumtypes.h.template
 	glib-mkenums --template $< $(gami_headers) >$@.tmp && mv $@.tmp $@
 
-gami-enumtypes.c: gami-enumtypes.c.template
+gami-enumtypes.c: $(gami_headers) gami-enumtypes.c.template
 	glib-mkenums --template $< $(gami_headers) >$@.tmp && mv $@.tmp $@
 
 if ENABLE_INTROSPECTION

@@ -79,6 +79,22 @@ typedef enum {
  * Returns: The #GType of #GamiModuleLoadType
  */
 
+/*
+ * FIXME: define error conditions instead of mangling everything into
+ *        a generic condition
+ */
+
+/**
+ * GamiError:
+ * @GAMI_ERROR_FAILED: Generic error condition when any action fails.
+ *
+ * Error codes returned by Gami functions.
+ *
+ **/
+typedef enum {
+	GAMI_ERROR_FAILED
+} GamiError;
+
 G_END_DECLS
 
 #endif

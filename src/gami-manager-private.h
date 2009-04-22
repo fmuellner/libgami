@@ -4,6 +4,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <gami-manager.h>
+#include <gami-error.h>
 
 typedef struct _GamiManagerPrivate GamiManagerPrivate;
 struct _GamiManagerPrivate
