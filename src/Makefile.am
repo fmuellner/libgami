@@ -58,10 +58,10 @@ EXTRA_DIST +=                     \
         gami-enumtypes.c.template \
         $(NULL)
 
-gami-enumtypes.h: $(gami_headers) gami-enumtypes.h.template
+gami-enumtypes.h: gami-enumtypes.h.template $(gami_headers)
 	glib-mkenums --template $< $(gami_headers) >$@.tmp && mv $@.tmp $@
 
-gami-enumtypes.c: $(gami_headers) gami-enumtypes.c.template
+gami-enumtypes.c: gami-enumtypes.c.template $(gami_headers)
 	glib-mkenums --template $< $(gami_headers) >$@.tmp && mv $@.tmp $@
 
 if ENABLE_INTROSPECTION
