@@ -699,6 +699,9 @@ string_hook (gpointer data)
                                          GAMI_ERROR,
                                          GAMI_ERROR_FAILED,
                                          message ?  message : "Action failed");
+
+    g_simple_async_result_complete_in_idle (simple);
+
     return FALSE;
 }
 
@@ -739,6 +742,9 @@ hash_hook (gpointer data)
                                          GAMI_ERROR,
                                          GAMI_ERROR_FAILED,
                                          message ?  message : "Action failed");
+
+    g_simple_async_result_complete_in_idle (simple);
+
     return FALSE;
 }
 
