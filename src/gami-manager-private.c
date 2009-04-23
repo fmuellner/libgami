@@ -58,9 +58,20 @@ wait_string_result (GamiManager *ami,
                     GamiStringFinishFunc finish,
                     GError **error)
 {
-    return (gchar *) wait_pointer_result (ami,
-                                          (GamiPointerFinishFunc) finish,
-                                          error);
+    GamiManagerPrivate *priv;
+    gchar *res;
+
+    priv = GAMI_MANAGER_PRIVATE (ami);
+
+    while (!priv->sync_result)
+        g_main_context_iteration (NULL, TRUE);
+
+    res = g_strdup (finish (ami, priv->sync_result, error));
+
+    g_object_unref (priv->sync_result);
+    priv->sync_result = NULL;
+
+    return res;
 }
 
 GHashTable *
@@ -68,9 +79,21 @@ wait_hash_result (GamiManager *ami,
                   GamiHashFinishFunc finish,
                   GError **error)
 {
-    return (GHashTable *) wait_pointer_result (ami,
-                                               (GamiPointerFinishFunc) finish,
-                                               error);
+    GamiManagerPrivate *priv;
+    GHashTable *res;
+
+    priv = GAMI_MANAGER_PRIVATE (ami);
+
+    while (!priv->sync_result)
+        g_main_context_iteration (NULL, TRUE);
+
+    res = g_hash_table_ref ((GHashTable *) finish (ami,
+                                                   priv->sync_result,
+                                                   error));
+    g_object_unref (priv->sync_result);
+    priv->sync_result = NULL;
+
+    return res;
 }
 
 GSList *wait_list_result (GamiManager *ami,
@@ -267,6 +290,7 @@ setup_action_hook (GamiManager *ami,
         hook_data = gami_hook_data_new (G_ASYNC_RESULT (simple), action_id, handler_data);
         action_hook->data = hook_data;
         action_hook->func = handler;
+        action_hook->destroy = (GDestroyNotify) gami_hook_data_free;
         g_hook_append (&priv->packet_hooks, action_hook);
     }
 }
@@ -544,12 +568,11 @@ gami_hook_data_new (GAsyncResult *result,
 void
 gami_hook_data_free (GamiHookData *data)
 {
-    if (data->packet)
-        gami_packet_free (data->packet);
     if (data->result)
         g_object_unref (data->result);
     if (data->action_id)
         g_free (data->action_id);
+    g_free (data);
     /* FIXME: handler_data ? */
 }
 

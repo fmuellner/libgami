@@ -207,9 +207,10 @@ gboolean
 gami_manager_connect (GamiManager *ami, GError **error)
 {
     GamiManagerPrivate *priv;
-    struct addrinfo hints;
-    struct addrinfo *rp, *result = NULL;
-    int rv;
+    struct addrinfo     hints;
+    struct addrinfo    *rp,
+                       *result = NULL;
+    int                 s;
 
     SOCKET sock = INVALID_SOCKET;
 
@@ -218,15 +219,13 @@ gami_manager_connect (GamiManager *ami, GError **error)
     priv = GAMI_MANAGER_PRIVATE (ami);
 
     memset (&hints, 0, sizeof (struct addrinfo));
-    hints.ai_family = AF_UNSPEC;
+    hints.ai_family   = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    if ((rv = getaddrinfo (priv->host, priv->port, &hints, &result)) != 0) {
+    if ((s = getaddrinfo (priv->host, priv->port, &hints, &result)) != 0)
         g_warning ("Error resolving host '%s': %s", priv->host,
-                   gai_strerror (rv));
-        return FALSE;
-    }
+                   gai_strerror (s));
 
     for (rp = result; rp; rp = rp->ai_next) {
         sock = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
@@ -241,15 +240,14 @@ gami_manager_connect (GamiManager *ami, GError **error)
         sock = INVALID_SOCKET;
     }
 
+    freeaddrinfo (result);
 
     if (rp == NULL) {
         /* Error */
-        freeaddrinfo (result);
 
         return FALSE;
     }
 
-    freeaddrinfo (result);
 
     priv->socket = G_SOCKET_IO_CHANNEL_NEW (sock);
 
@@ -6020,7 +6018,7 @@ parse_connection_string (GamiManager *ami, GError **error)
     split_version = g_strsplit (ami->api_version, ".", 2);
     ami->api_major = atoi (split_version [0]);
     ami->api_minor = atoi (split_version [1]);
-    g_free (split_version);
+    g_strfreev (split_version);
 
     return TRUE;
 }
@@ -6192,7 +6190,6 @@ static void
 gami_manager_class_init (GamiManagerClass *klass)
 {
     GObjectClass *object_class = G_OBJECT_CLASS (klass);
-    GParamSpec   *pspec;
 
     g_type_class_add_private (klass, sizeof (GamiManagerPrivate));
 
@@ -6205,24 +6202,28 @@ gami_manager_class_init (GamiManagerClass *klass)
      *
      * The Asterisk manager host to connect to
      **/
-    pspec = g_param_spec_string ("host",
-                                 "Asterisk manager host",
-                                 "Set Asterisk manager host to connect to",
-                                 "localhost",
-                                 G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE);
-    g_object_class_install_property (object_class, HOST_PROP, pspec);
+    g_object_class_install_property (object_class,
+                                     HOST_PROP,
+                                     g_param_spec_string ("host",
+                                                          "manager host",
+                                                          "manager host",
+                                                          "localhost",
+                                                          G_PARAM_CONSTRUCT_ONLY
+                                                          | G_PARAM_READWRITE));
 
     /**
      * GamiManager:port:
      *
      * The Asterisk manager port to connect to
      **/
-    pspec = g_param_spec_string ("port",
-                                 "Asterisk manager port",
-                                 "Set Asterisk manager port to connect to",
-                                 "5038",
-                                 G_PARAM_CONSTRUCT_ONLY | G_PARAM_READWRITE);
-    g_object_class_install_property (object_class, PORT_PROP, pspec);
+    g_object_class_install_property (object_class,
+                                     PORT_PROP,
+                                     g_param_spec_string ("port",
+                                                          "manager port",
+                                                          "manager port",
+                                                          "5038",
+                                                          G_PARAM_CONSTRUCT_ONLY
+                                                          | G_PARAM_READWRITE));
 
     /**
      * GamiManager::connected:
