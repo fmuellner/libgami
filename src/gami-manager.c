@@ -353,6 +353,16 @@ gami_manager_login_async (GamiManager *ami,
     g_free (event_str);
 }
 
+/**
+ * gami_manager_login_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_login_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_login_finish (GamiManager *ami,
                            GAsyncResult *result,
@@ -414,6 +424,16 @@ gami_manager_logoff_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_logoff_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_logoff_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_logoff_finish (GamiManager *ami,
                            GAsyncResult *result,
@@ -464,9 +484,8 @@ gami_manager_get_var (GamiManager *ami,
  * @channel: (allow-none): Channel to retrieve variable from
  * @variable: Name of the variable to retrieve
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation.
- * @response_data: User data to pass to the callback.
- * @error: A location to return an error of type #GIOChannelError
+ * @callback: Callback for asynchronious operation.
+ * @user_data: User data to pass to the callback.
  *
  * Get value of @variable (either from @channel or as global)
  *
@@ -494,6 +513,16 @@ gami_manager_get_var_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_get_var_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_get_var_async()
+ *
+ * Returns: the value of the requested variable, or %NULL
+ */
 gchar *
 gami_manager_get_var_finish (GamiManager *ami,
                              GAsyncResult *result,
@@ -572,6 +601,16 @@ gami_manager_set_var_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_set_var_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_set_var_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_set_var_finish (GamiManager *ami,
                            GAsyncResult *result,
@@ -645,6 +684,16 @@ gami_manager_module_check_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_module_check_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_module_check_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_module_check_finish (GamiManager *ami,
                                   GAsyncResult *result,
@@ -690,9 +739,8 @@ gami_manager_module_load (GamiManager *ami,
  * @module: Asterisk module name (not including extension)
  * @load_type: Load action to perform (load, reload or unload)
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation.
- * @response_data: User data to pass to the callback.
- * @error: A location to return an error of type #GIOChannelError
+ * @callback: Callback for asynchronious operation.
+ * @user_data: User data to pass to the callback.
  *
  * Perform action indicated by @load_type for @module
  *
@@ -732,6 +780,16 @@ gami_manager_module_load_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_module_load_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_module_load_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_module_load_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -827,6 +885,16 @@ gami_manager_monitor_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_monitor_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_monitor_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_monitor_finish (GamiManager *ami,
                              GAsyncResult *result,
@@ -902,6 +970,16 @@ gami_manager_change_monitor_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_change_monitor_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_change_monitor_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_change_monitor_finish (GamiManager *ami,
                                     GAsyncResult *result,
@@ -972,6 +1050,16 @@ gami_manager_stop_monitor_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_stop_monitor_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_stop_monitor_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_stop_monitor_finish (GamiManager *ami,
                                   GAsyncResult *result,
@@ -1041,6 +1129,16 @@ gami_manager_pause_monitor_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_pause_monitor_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_pause_monitor_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_pause_monitor_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -1110,6 +1208,16 @@ gami_manager_unpause_monitor_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_unpause_monitor_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_unpause_monitor_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_unpause_monitor_finish (GamiManager *ami,
                                      GAsyncResult *result,
@@ -1187,6 +1295,16 @@ gami_manager_meetme_mute_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_meetme_mute_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_meetme_mute_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_meetme_mute_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -1261,6 +1379,16 @@ gami_manager_meetme_unmute_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_meetme_unmute_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_meetme_unmute_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_meetme_unmute_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -1307,7 +1435,7 @@ gami_manager_meetme_list (GamiManager *ami,
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
- * List al users in conference @meetme
+ * List all users in conference @meetme
  */
 void
 gami_manager_meetme_list_async (GamiManager *ami,
@@ -1328,6 +1456,17 @@ gami_manager_meetme_list_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_meetme_list_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_meetme_list_async()
+ *
+ * Returns: #GSList of user information (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_meetme_list_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -1425,6 +1564,16 @@ gami_manager_queue_add_async (GamiManager *ami,
     g_free (spenalty);
 }
 
+/**
+ * gami_manager_queue_add_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_queue_add_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_queue_add_finish (GamiManager *ami,
                                GAsyncResult *result,
@@ -1498,6 +1647,16 @@ gami_manager_queue_remove_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_queue_remove_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_queue_remove_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_queue_remove_finish (GamiManager *ami,
                                   GAsyncResult *result,
@@ -1581,6 +1740,16 @@ gami_manager_queue_pause_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_queue_pause_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_queue_pause_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_queue_pause_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -1665,6 +1834,16 @@ gami_manager_queue_penalty_async (GamiManager *ami,
     g_free (spenalty);
 }
 
+/**
+ * gami_manager_queue_penalty_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_queue_penalty_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_queue_penalty_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -1732,6 +1911,17 @@ gami_manager_queue_summary_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_queue_summary_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_queue_summary_async()
+ *
+ * Returns: #GSList of queue statistics (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_queue_summary_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -1806,6 +1996,16 @@ gami_manager_queue_log_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_queue_log_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_queue_log_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_queue_log_finish (GamiManager *ami,
                                GAsyncResult *result,
@@ -1971,6 +2171,16 @@ gami_manager_zap_dial_offhook_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_zap_dial_offhook_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_zap_dial_offhook_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_zap_dial_offhook_finish (GamiManager *ami,
                                       GAsyncResult *result,
@@ -2011,9 +2221,8 @@ gami_manager_zap_hangup (GamiManager *ami,
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel to hang up
  * @action_id: (allow-none): ActionID to ease response matching
- * @response_func: Callback for asynchronious operation.
- * @response_data: User data to pass to the callback.
- * @error: A location to return an error of type #GIOChannelError
+ * @callback: Callback for asynchronious operation.
+ * @user_data: User data to pass to the callback.
  *
  * Hangup ZAP channel
  */
@@ -2038,6 +2247,16 @@ gami_manager_zap_hangup_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_zap_hangup_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_zap_hangup_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_zap_hangup_finish (GamiManager *ami,
                                 GAsyncResult *result,
@@ -2106,6 +2325,16 @@ gami_manager_zap_dnd_on_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_zap_dnd_on_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_zap_dnd_on_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_zap_dnd_on_finish (GamiManager *ami,
                                 GAsyncResult *result,
@@ -2174,6 +2403,16 @@ gami_manager_zap_dnd_off_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_zap_dnd_off_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_zap_dnd_off_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_zap_dnd_off_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -2235,6 +2474,17 @@ gami_manager_zap_show_channels_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_zap_show_channels_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_zap_show_channels_async()
+ *
+ * Returns: #GSList of ZAP channels (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_zap_show_channels_finish (GamiManager *ami,
                                        GAsyncResult *result,
@@ -2301,6 +2551,16 @@ gami_manager_zap_transfer_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_zap_transfer_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_zap_transfer_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_zap_transfer_finish (GamiManager *ami,
                                   GAsyncResult *result,
@@ -2361,6 +2621,16 @@ gami_manager_zap_restart_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_zap_restart_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_zap_restart_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_zap_restart_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -2440,6 +2710,16 @@ gami_manager_dahdi_dial_offhook_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_dahdi_dial_offhook_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_dahdi_dial_offhook_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_dahdi_dial_offhook_finish (GamiManager *ami,
                                         GAsyncResult *result,
@@ -2508,6 +2788,16 @@ gami_manager_dahdi_hangup_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_dahdi_hangup_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_dahdi_hangup_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_dahdi_hangup_finish (GamiManager *ami,
                                   GAsyncResult *result,
@@ -2576,6 +2866,16 @@ gami_manager_dahdi_dnd_on_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_dahdi_dnd_on_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_dahdi_dnd_on_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_dahdi_dnd_on_finish (GamiManager *ami,
                                   GAsyncResult *result,
@@ -2620,7 +2920,6 @@ gami_manager_dahdi_dnd_off (GamiManager *ami,
  * @action_id: (allow-none): ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
- * @error: A location to return an error of type #GIOChannelError
  *
  * Set DND (Do Not Disturb) status on @dahdi_channel to off
  */
@@ -2645,6 +2944,16 @@ gami_manager_dahdi_dnd_off_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_dahdi_dnd_off_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_dahdi_dnd_off_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_dahdi_dnd_off_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -2713,6 +3022,17 @@ gami_manager_dahdi_show_channels_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_dahdi_show_channels_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_dahdi_show_channels_async()
+ *
+ * Returns: #GSList of DAHDI channels (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_dahdi_show_channels_finish (GamiManager *ami,
                                          GAsyncResult *result,
@@ -2779,6 +3099,16 @@ gami_manager_dahdi_transfer_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_dahdi_transfer_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_dahdi_transfer_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_dahdi_transfer_finish (GamiManager *ami,
                                     GAsyncResult *result,
@@ -2837,6 +3167,16 @@ gami_manager_dahdi_restart_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_dahdi_restart_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_dahdi_restart_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_dahdi_restart_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -2902,6 +3242,17 @@ gami_manager_agents_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_agents_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_agents_async()
+ *
+ * Returns: #GSList of agents (stored as #GHashTable) on success,
+ *           %NULL on failure
+ */
 GSList *
 gami_manager_agents_finish (GamiManager *ami,
                             GAsyncResult *result,
@@ -3009,6 +3360,17 @@ gami_manager_agent_callback_login_async (GamiManager *ami,
     g_free (swrapup_time);
 }
 
+/**
+ * gami_manager_agent_callback_login_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_agent_callback_login_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_agent_callback_login_finish (GamiManager *ami,
                                           GAsyncResult *result,
@@ -3077,6 +3439,17 @@ gami_manager_agent_logoff_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_agent_logoff_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_agent_logoff_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_agent_logoff_finish (GamiManager *ami,
                                   GAsyncResult *result,
@@ -3155,6 +3528,16 @@ gami_manager_db_get_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_db_get_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_db_get_async()
+ *
+ * Returns: the value of the requested DB key, or %NULL
+ */
 gchar *
 gami_manager_db_get_finish (GamiManager *ami,
                             GAsyncResult *result,
@@ -3235,6 +3618,16 @@ gami_manager_db_put_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_db_put_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_db_put_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_db_put_finish (GamiManager *ami,
                             GAsyncResult *result,
@@ -3310,6 +3703,16 @@ gami_manager_db_del_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_db_del_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_db_del_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_db_del_finish (GamiManager *ami,
                             GAsyncResult *result,
@@ -3378,6 +3781,16 @@ gami_manager_db_del_tree_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_db_del_tree_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_db_del_tree_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_db_del_tree_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -3469,6 +3882,16 @@ gami_manager_park_async (GamiManager *ami,
     g_free (stimeout);
 }
 
+/**
+ * gami_manager_park_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_park_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_park_finish (GamiManager *ami,
                           GAsyncResult *result,
@@ -3530,6 +3953,18 @@ gami_manager_parked_calls_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_parked_calls_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_parked_calls_async()
+ *
+ * Returns: #GSList of parked calls (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_parked_calls_finish (GamiManager *ami,
                                   GAsyncResult *result,
@@ -3597,6 +4032,18 @@ gami_manager_voicemail_users_list_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_voicemail_users_list_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_voicemail_users_list_async()
+ *
+ * Returns: #GSList of voicemail users (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_voicemail_users_list_finish (GamiManager *ami,
                                           GAsyncResult *result,
@@ -3665,6 +4112,17 @@ gami_manager_mailbox_count_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_mailbox_count_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_mailbox_count_async()
+ *
+ * Returns: #GHashTable with message counts on success, %NULL on failure
+ */
 GHashTable *
 gami_manager_mailbox_count_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -3730,6 +4188,17 @@ gami_manager_mailbox_status_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_mailbox_status_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_mailbox_status_async()
+ *
+ * Returns: #GHashTable with status variables on success, %NULL on failure
+ */
 GHashTable *
 gami_manager_mailbox_status_finish (GamiManager *ami,
                                     GAsyncResult *result,
@@ -3794,6 +4263,17 @@ gami_manager_core_status_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_core_status_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_core_status_async()
+ *
+ * Returns: #GHashTable with status variables on success, %NULL on failure
+ */
 GHashTable *
 gami_manager_core_status_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -3857,6 +4337,18 @@ gami_manager_core_show_channels_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_core_show_channels_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_core_show_channels_async()
+ *
+ * Returns: #GSList of active channels (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_core_show_channels_finish (GamiManager *ami,
                                         GAsyncResult *result,
@@ -3915,6 +4407,17 @@ gami_manager_core_settings_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_core_settings_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_core_settings_async()
+ *
+ * Returns: #GHashTable with settings variables on success, %NULL on failure
+ */
 GHashTable *
 gami_manager_core_settings_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -3978,6 +4481,18 @@ gami_manager_iax_peer_list_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_iax_peer_list_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_iax_peer_list_async()
+ *
+ * Returns: #GSList of IAX2 peers (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_iax_peer_list_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -4037,6 +4552,17 @@ gami_manager_sip_peers_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_sip_peers_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_sip_peers_async()
+ *
+ * Returns: #GSList of SIP peers (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_sip_peers_finish (GamiManager *ami,
                                GAsyncResult *result,
@@ -4105,6 +4631,16 @@ gami_manager_sip_show_peer_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_sip_show_peer_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_sip_show_peer_async()
+ *
+ * Returns: #GHashTable of peer status information on success, %NULL on failure
+ */
 GHashTable *
 gami_manager_sip_show_peer_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -4166,6 +4702,18 @@ gami_manager_sip_show_registry_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_sip_show_registry_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_sip_show_registry_async()
+ *
+ * Returns: #GSList of registry information (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_sip_show_registry_finish (GamiManager *ami,
                                        GAsyncResult *result,
@@ -4212,8 +4760,6 @@ gami_manager_status (GamiManager *ami,
  *
  * Retrieve status information of active channels (or @channel)
  *
- * Returns: #GSList of status information (stored as #GHashTable) on success,
- *          %NULL on failure
  */
 void
 gami_manager_status_async (GamiManager *ami,
@@ -4234,6 +4780,17 @@ gami_manager_status_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_status_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_status_async()
+ *
+ * Returns: #GSList of status information (stored as #GHashTable) on success,
+ *          %NULL on failure
+ */
 GSList *
 gami_manager_status_finish (GamiManager *ami,
                             GAsyncResult *result,
@@ -4312,6 +4869,17 @@ gami_manager_extension_state_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_extension_state_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_extension_state_async()
+ *
+ * Returns: #GHashTable of status information on success, %NULL on failure
+ */
 GHashTable *
 gami_manager_extension_state_finish (GamiManager *ami,
                                      GAsyncResult *result,
@@ -4372,6 +4940,16 @@ gami_manager_ping_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_ping_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_ping_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_ping_finish (GamiManager *ami,
                           GAsyncResult *result,
@@ -4451,6 +5029,17 @@ gami_manager_absolute_timeout_async (GamiManager *ami,
     g_free (stimeout);
 }
 
+/**
+ * gami_manager_absolute_timeout_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_absolute_timeout_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_absolute_timeout_finish (GamiManager *ami,
                                       GAsyncResult *result,
@@ -4470,7 +5059,7 @@ gami_manager_absolute_timeout_finish (GamiManager *ami,
  *
  * Retrieve a challenge string to use for authentification of type @auth_type
  *
- * Returns: the generated challenge on success, %FALSE on failure
+ * Returns: the generated challenge on success, %NULL on failure
  */
 gchar *
 gami_manager_challenge (GamiManager *ami,
@@ -4517,6 +5106,16 @@ gami_manager_challenge_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_challenge_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_challenge_async()
+ *
+ * Returns: the generated challenge on success, %NULL on failure
+ */
 gchar *
 gami_manager_challenge_finish (GamiManager *ami,
                                GAsyncResult *result,
@@ -4603,6 +5202,17 @@ gami_manager_set_cdr_user_field_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_set_cdr_user_field_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_set_cdr_user_field_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_set_cdr_user_field_finish (GamiManager *ami,
                                         GAsyncResult *result,
@@ -4669,6 +5279,16 @@ gami_manager_reload_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_reload_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_reload_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_reload_finish (GamiManager *ami,
                             GAsyncResult *result,
@@ -4737,6 +5357,16 @@ gami_manager_hangup_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_hangup_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_hangup_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_hangup_finish (GamiManager *ami,
                             GAsyncResult *result,
@@ -4830,6 +5460,16 @@ gami_manager_redirect_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_redirect_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_redirect_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_redirect_finish (GamiManager *ami,
                               GAsyncResult *result,
@@ -4914,6 +5554,16 @@ gami_manager_bridge_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_bridge_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_bridge_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_bridge_finish (GamiManager *ami,
                             GAsyncResult *result,
@@ -4994,6 +5644,16 @@ gami_manager_agi_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_agi_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_agi_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_agi_finish (GamiManager *ami,
                          GAsyncResult *result,
@@ -5068,6 +5728,16 @@ gami_manager_send_text_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_send_text_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_send_text_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_send_text_finish (GamiManager *ami,
                                GAsyncResult *result,
@@ -5148,6 +5818,16 @@ gami_manager_jabber_send_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_jabber_send_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_jabber_send_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_jabber_send_finish (GamiManager *ami,
                                  GAsyncResult *result,
@@ -5227,6 +5907,16 @@ gami_manager_play_dtmf_async (GamiManager *ami,
     g_free (sdigit);
 }
 
+/**
+ * gami_manager_play_dtmf_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_play_dtmf_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_play_dtmf_finish (GamiManager *ami,
                                GAsyncResult *result,
@@ -5290,6 +5980,18 @@ gami_manager_list_commands_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_list_commands_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_list_commands_async()
+ *
+ * Returns: A #GHashTable of action names / descriptions on success, 
+ *          %NULL on failure
+ */
 GHashTable *
 gami_manager_list_commands_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -5359,6 +6061,18 @@ gami_manager_list_categories_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_list_categories_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_list_categories_async()
+ *
+ * Returns: A #GHashTable of category number / name on success, 
+ *          %NULL on failure
+ */
 GHashTable *
 gami_manager_list_categories_finish (GamiManager *ami,
                                      GAsyncResult *result,
@@ -5426,6 +6140,17 @@ gami_manager_get_config_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_get_config_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_get_config_async()
+ *
+ * Returns: A #GHashTable of line number / values on success, 
+ *          %NULL on failure
+ */
 GHashTable *
 gami_manager_get_config_finish (GamiManager *ami,
                                 GAsyncResult *result,
@@ -5495,6 +6220,18 @@ gami_manager_get_config_json_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_get_config_json_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_get_config_json_async()
+ *
+ * Returns: A #GHashTable with file dump on success,
+ *          %NULL on failure
+ */
 GHashTable *
 gami_manager_get_config_json_finish (GamiManager *ami,
                                      GAsyncResult *result,
@@ -5561,6 +6298,17 @@ gami_manager_create_config_async (GamiManager *ami,
                        NULL);
 }
 
+/**
+ * gami_manager_create_config_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_create_config_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_create_config_finish (GamiManager *ami,
                                    GAsyncResult *result,
@@ -5714,6 +6462,16 @@ gami_manager_originate_async (GamiManager *ami,
     g_free (svariables);
 }
 
+/**
+ * gami_manager_originate_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_originate_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_originate_finish (GamiManager *ami,
                                GAsyncResult *result,
@@ -5787,6 +6545,16 @@ gami_manager_events_async (GamiManager *ami,
     g_free (sevent_mask);
 }
 
+/**
+ * gami_manager_events_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_events_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_events_finish (GamiManager *ami,
                             GAsyncResult *result,
@@ -5893,6 +6661,16 @@ gami_manager_user_event_async (GamiManager *ami,
     g_free (action_complete);
 }
 
+/**
+ * gami_manager_user_event_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_user_event_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean
 gami_manager_user_event_finish (GamiManager *ami,
                                 GAsyncResult *result,
@@ -5964,6 +6742,16 @@ gami_manager_wait_event_async (GamiManager *ami,
     g_free (stimeout);
 }
 
+/**
+ * gami_manager_wait_event_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_wait_event_async()
+ *
+ * Returns: %TRUE if the action succeeded, otherwise %FALSE
+ */
 gboolean gami_manager_wait_event_finish (GamiManager *ami,
                                          GAsyncResult *result,
                                          GError **error)
