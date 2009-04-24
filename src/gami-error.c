@@ -21,8 +21,10 @@
 #include "gami-error.h"
 
 /**
- * SECTION: gami-error
+ * SECTION: libgami-error
  * @short_description: Error helper functions
+ * @title: GamiError
+ * @stability: Unstable
  *
  * Contains helper functions for reporting errors to the user.
  **/

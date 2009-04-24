@@ -1,5 +1,9 @@
 2009-04-23  Florian Müllner <florian.muellner@gmail.com>
 
+	* [r465] ChangeLog, docs/reference/libgami-sections.txt,
+	  src/gami-manager.c:
+	  Updating documentation to account for recent API changes. Refs
+	  #26.
 	* [r464] src/gami-manager-private.c, src/gami-manager.c:
 	  Improve memory handling, some code cleanup. Refs #26.
 	* [r463] src/Makefile.am:
