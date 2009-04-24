@@ -272,13 +272,13 @@ gami_manager_connect (GamiManager *ami, GError **error)
  * @ami: #GamiManager
  * @username: Username to use for authentification
  * @secret: Password to use for authentification
- * @auth_type: (allow-none): AuthType to use for authentification - if set
- *             to "md5", @secret is expected to contain an MD5 hash of the
- *             result string of gami_manager_challenge() and the user's password
+ * @auth_type: AuthType to use for authentification - if set to "md5",
+ *             @secret is expected to contain an MD5 hash of the result 
+ *             string of gami_manager_challenge() and the user's password
  * @events: Flags of type %GamiEventMask, indicating which events should be
  *          received initially. It is possible to modify this setting using the
  *          gami_manager_events() action
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Authenticate to asterisk and open a new manager session
@@ -310,13 +310,13 @@ gami_manager_login (GamiManager *ami,
  * @ami: #GamiManager
  * @username: Username to use for authentification
  * @secret: Password to use for authentification
- * @auth_type: (allow-none): AuthType to use for authentification - if set
- *             to "md5", @secret is expected to contain an MD5 hash of the
- *             result string of gami_manager_challenge() and the user's password
+ * @auth_type: AuthType to use for authentification - if set to "md5",
+ *             @secret is expected to contain an MD5 hash of the result
+ *             string of gami_manager_challenge() and the user's password
  * @events: Flags of type %GamiEventMask, indicating which events should be
  *          received initially. It is possible to modify this setting using the
  *          gami_manager_events() action
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -378,7 +378,7 @@ gami_manager_login_finish (GamiManager *ami,
 /**
  * gami_manager_logoff:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Close the manager session and disconnect from asterisk
@@ -399,7 +399,7 @@ gami_manager_logoff (GamiManager *ami,
 /**
  * gami_manager_logoff_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -453,9 +453,9 @@ gami_manager_logoff_finish (GamiManager *ami,
 /**
  * gami_manager_get_var:
  * @ami: #GamiManager
- * @channel: (allow-none): Channel to retrieve variable from
+ * @channel: Channel to retrieve variable from
  * @variable: Name of the variable to retrieve
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Get value of @variable (either from @channel or as global)
@@ -481,9 +481,9 @@ gami_manager_get_var (GamiManager *ami,
 /**
  * gami_manager_get_var_async:
  * @ami: #GamiManager
- * @channel: (allow-none): Channel to retrieve variable from
+ * @channel: Channel to retrieve variable from
  * @variable: Name of the variable to retrieve
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -537,10 +537,10 @@ gami_manager_get_var_finish (GamiManager *ami,
 /**
  * gami_manager_set_var:
  * @ami: #GamiManager
- * @channel: (allow-none): Channel to set variable for
+ * @channel: Channel to set variable for
  * @variable: Name of the variable to set
  * @value: New value for @variable
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set @variable (optionally on channel @channel) to @value
@@ -569,10 +569,10 @@ gami_manager_set_var (GamiManager *ami,
 /**
  * gami_manager_set_var_async:
  * @ami: #GamiManager
- * @channel: (allow-none): Channel to set variable for
+ * @channel: Channel to set variable for
  * @variable: Name of the variable to set
  * @value: New value for @variable
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -631,7 +631,7 @@ gami_manager_set_var_finish (GamiManager *ami,
  * gami_manager_module_check:
  * @ami: #GamiManager
  * @module: Asterisk module name (not including extension)
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Check whether @module is loaded
@@ -656,7 +656,7 @@ gami_manager_module_check (GamiManager *ami,
  * gami_manager_module_check_async:
  * @ami: #GamiManager
  * @module: Asterisk module name (not including extension)
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -710,7 +710,7 @@ gami_manager_module_check_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @module: Asterisk module name (not including extension)
  * @load_type: Load action to perform (load, reload or unload)
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Perform action indicated by @load_type for @module
@@ -738,7 +738,7 @@ gami_manager_module_load (GamiManager *ami,
  * @ami: #GamiManager
  * @module: Asterisk module name (not including extension)
  * @load_type: Load action to perform (load, reload or unload)
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -809,10 +809,10 @@ gami_manager_module_load_finish (GamiManager *ami,
  * gami_manager_monitor:
  * @ami: #GamiManager
  * @channel: Channel to start monitoring
- * @file: (allow-none): Filename to use for recording
- * @format: (allow-none): Format to use for recording
- * @mix: (allow-none): Whether to mix in / out channel into one file
- * @action_id: (allow-none): ActionID to ease response matching
+ * @file: Filename to use for recording
+ * @format: Format to use for recording
+ * @mix: Whether to mix in / out channel into one file
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Start monitoring @channel
@@ -843,10 +843,10 @@ gami_manager_monitor (GamiManager *ami,
  * gami_manager_monitor_async:
  * @ami: #GamiManager
  * @channel: Channel to start monitoring
- * @file: (allow-none): Filename to use for recording
- * @format: (allow-none): Format to use for recording
- * @mix: (allow-none): Whether to mix in / out channel into one file
- * @action_id: (allow-none): ActionID to ease response matching
+ * @file: Filename to use for recording
+ * @format: Format to use for recording
+ * @mix: Whether to mix in / out channel into one file
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -912,7 +912,7 @@ gami_manager_monitor_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: Monitored channel
  * @file: New filename to use for recording
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Change the file name of the recording occuring on @channel
@@ -940,7 +940,7 @@ gami_manager_change_monitor (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: Monitored channel
  * @file: New filename to use for recording
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -997,7 +997,7 @@ gami_manager_change_monitor_finish (GamiManager *ami,
  * gami_manager_stop_monitor:
  * @ami: #GamiManager
  * @channel: Monitored channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Stop monitoring @channel
@@ -1022,7 +1022,7 @@ gami_manager_stop_monitor (GamiManager *ami,
  * gami_manager_stop_monitor_async:
  * @ami: #GamiManager
  * @channel: Monitored channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1076,7 +1076,7 @@ gami_manager_stop_monitor_finish (GamiManager *ami,
  * gami_manager_pause_monitor:
  * @ami: #GamiManager
  * @channel: Monitored channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Pause monitoring of @channel
@@ -1101,7 +1101,7 @@ gami_manager_pause_monitor (GamiManager *ami,
  * gami_manager_pause_monitor_async:
  * @ami: #GamiManager
  * @channel: Monitored channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1155,7 +1155,7 @@ gami_manager_pause_monitor_finish (GamiManager *ami,
  * gami_manager_unpause_monitor:
  * @ami: #GamiManager
  * @channel: Monitored channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Continue monitoring of @channel
@@ -1180,7 +1180,7 @@ gami_manager_unpause_monitor (GamiManager *ami,
  * gami_manager_unpause_monitor_async:
  * @ami: #GamiManager
  * @channel: Monitored channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1237,7 +1237,7 @@ gami_manager_unpause_monitor_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
  * @user_num: The user number in the specified bridge
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Mutes @user_num in conference @meetme
@@ -1265,7 +1265,7 @@ gami_manager_meetme_mute (GamiManager *ami,
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
  * @user_num: The user number in the specified bridge
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1322,7 +1322,7 @@ gami_manager_meetme_mute_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
  * @user_num: The user number in the specified bridge
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Unmutes @user_num in conference @meetme
@@ -1350,7 +1350,7 @@ gami_manager_meetme_unmute (GamiManager *ami,
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
  * @user_num: The user number in the specified bridge
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1405,7 +1405,7 @@ gami_manager_meetme_unmute_finish (GamiManager *ami,
  * gami_manager_meetme_list:
  * @ami: #GamiManager
  * @meetme: The MeetMe conference bridge number
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * List al users in conference @meetme
@@ -1431,7 +1431,7 @@ gami_manager_meetme_list (GamiManager *ami,
  * gami_manager_meetme_list_async:
  * @ami: #GamiManager
  * @conference: The MeetMe conference bridge number
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1490,7 +1490,7 @@ gami_manager_meetme_list_finish (GamiManager *ami,
  * @iface: Member interface to add to @queue
  * @penalty: Penalty for new member
  * @paused: whether @iface should be initially paused
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Add @iface to @queue
@@ -1524,7 +1524,7 @@ gami_manager_queue_add (GamiManager *ami,
  * @iface: Member interface to add to @queue
  * @penalty: Penalty for new member
  * @paused: whether @iface should be initially paused
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1590,7 +1590,7 @@ gami_manager_queue_add_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @queue: Existing queue to remove member from
  * @iface: Member interface to remove from @queue
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Remove @iface from @queue
@@ -1618,7 +1618,7 @@ gami_manager_queue_remove (GamiManager *ami,
  * @ami: #GamiManager
  * @queue: Existing queue to remove member from
  * @iface: Member interface to remove from @queue
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1671,10 +1671,10 @@ gami_manager_queue_remove_finish (GamiManager *ami,
 /**
  * gami_manager_queue_pause:
  * @ami: #GamiManager
- * @queue: (allow-none): Existing queue for which @iface should be (un)paused
+ * @queue: Existing queue for which @iface should be (un)paused
  * @iface: Member interface (un)pause
  * @paused: Whether to pause or unpause @iface
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * (Un)pause @iface
@@ -1702,10 +1702,10 @@ gami_manager_queue_pause (GamiManager *ami,
 /**
  * gami_manager_queue_pause_async:
  * @ami: #GamiManager
- * @queue: (allow-none): Existing queue for which @iface should be (un)paused
+ * @queue: Existing queue for which @iface should be (un)paused
  * @iface: Member interface (un)pause
  * @paused: Whether to pause or unpause @iface
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1764,10 +1764,10 @@ gami_manager_queue_pause_finish (GamiManager *ami,
 /**
  * gami_manager_queue_penalty:
  * @ami: #GamiManager
- * @queue: (allow-none): Limit @penalty change to existing queue
+ * @queue: Limit @penalty change to existing queue
  * @iface: Member interface change penalty for
  * @penalty: New penalty to set for @iface
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Change the penalty value of @iface
@@ -1795,10 +1795,10 @@ gami_manager_queue_penalty (GamiManager *ami,
 /**
  * gami_manager_queue_penalty_async:
  * @ami: #GamiManager
- * @queue: (allow-none): Limit @penalty change to existing queue
+ * @queue: Limit @penalty change to existing queue
  * @iface: Member interface change penalty for
  * @penalty: New penalty to set for @iface
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1859,8 +1859,8 @@ gami_manager_queue_penalty_finish (GamiManager *ami,
 /**
  * gami_manager_queue_summary:
  * @ami: #GamiManager
- * @queue: (allow-none): Only send summary information for @queue
- * @action_id: (allow-none): ActionID to ease response matching
+ * @queue: Only send summary information for @queue
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Get summary of queue statistics
@@ -1885,8 +1885,8 @@ gami_manager_queue_summary (GamiManager *ami,
 /**
  * gami_manager_queue_summary_async:
  * @ami: #GamiManager
- * @queue: (allow-none): Only send summary information for @queue
- * @action_id: (allow-none): ActionID to ease response matching
+ * @queue: Only send summary information for @queue
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -1939,7 +1939,7 @@ gami_manager_queue_summary_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @queue: Queue to generate queue_log entry for
  * @event: Log event to generate
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Generate a queue_log entry for @queue
@@ -1967,7 +1967,7 @@ gami_manager_queue_log (GamiManager *ami,
  * @ami: #GamiManager
  * @queue: Queue to generate queue_log entry for
  * @event: Log event to generate
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2114,7 +2114,7 @@ gami_manager_queue_status (GamiManager *ami, const gchar *queue,
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to dial @number
  * @number: The number to dial
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Dial over ZAP channel while offhook
@@ -2142,7 +2142,7 @@ gami_manager_zap_dial_offhook (GamiManager *ami,
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to dial @number
  * @number: The number to dial
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2195,7 +2195,7 @@ gami_manager_zap_dial_offhook_finish (GamiManager *ami,
  * gami_manager_zap_hangup:
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel to hang up
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Hangup ZAP channel
@@ -2220,7 +2220,7 @@ gami_manager_zap_hangup (GamiManager *ami,
  * gami_manager_zap_hangup_async:
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel to hang up
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2273,7 +2273,7 @@ gami_manager_zap_hangup_finish (GamiManager *ami,
  * gami_manager_zap_dnd_on:
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to turn on DND status
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set DND (Do Not Disturb) status on @zap_channel
@@ -2298,7 +2298,7 @@ gami_manager_zap_dnd_on (GamiManager *ami,
  * gami_manager_zap_dnd_on_async:
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to turn on DND status
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2351,7 +2351,7 @@ gami_manager_zap_dnd_on_finish (GamiManager *ami,
  * gami_manager_zap_dnd_off:
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to turn off DND status
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set DND (Do Not Disturb) status on @zap_channel to off
@@ -2376,7 +2376,7 @@ gami_manager_zap_dnd_off (GamiManager *ami,
  * gami_manager_zap_dnd_off_async:
  * @ami: #GamiManager
  * @zap_channel: The ZAP channel on which to turn off DND status
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2428,7 +2428,7 @@ gami_manager_zap_dnd_off_finish (GamiManager *ami,
 /**
  * gami_manager_zap_show_channels:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Show the status of all ZAP channels
@@ -2451,7 +2451,7 @@ gami_manager_zap_show_channels (GamiManager *ami,
 /**
  * gami_manager_zap_show_channels_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2499,7 +2499,7 @@ gami_manager_zap_show_channels_finish (GamiManager *ami,
  * gami_manager_zap_transfer:
  * @ami: #GamiManager
  * @zap_channel: The channel to be transferred
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Transfer ZAP channel
@@ -2524,7 +2524,7 @@ gami_manager_zap_transfer (GamiManager *ami,
  * gami_manager_zap_transfer_async:
  * @ami: #GamiManager
  * @zap_channel: The channel to be transferred
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2576,7 +2576,7 @@ gami_manager_zap_transfer_finish (GamiManager *ami,
 /**
  * gami_manager_zap_restart:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Restart ZAP channels. Any active calls will be terminated
@@ -2598,7 +2598,7 @@ gami_manager_zap_restart (GamiManager *ami,
 /**
  * gami_manager_zap_restart_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2652,7 +2652,7 @@ gami_manager_zap_restart_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to dial @number
  * @number: The number to dial
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Dial over DAHDI channel while offhook
@@ -2681,7 +2681,7 @@ gami_manager_dahdi_dial_offhook (GamiManager *ami,
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to dial @number
  * @number: The number to dial
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2734,7 +2734,7 @@ gami_manager_dahdi_dial_offhook_finish (GamiManager *ami,
  * gami_manager_dahdi_hangup:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel to hang up
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Hangup DAHDI channel
@@ -2761,7 +2761,7 @@ gami_manager_dahdi_hangup (GamiManager *ami,
  * gami_manager_dahdi_hangup_async:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel to hang up
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2814,7 +2814,7 @@ gami_manager_dahdi_hangup_finish (GamiManager *ami,
  * gami_manager_dahdi_dnd_on:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to turn on DND status
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set DND (Do Not Disturb) status on @dahdi_channel
@@ -2839,7 +2839,7 @@ gami_manager_dahdi_dnd_on (GamiManager *ami,
  * gami_manager_dahdi_dnd_on_async:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to turn on DND status
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2892,7 +2892,7 @@ gami_manager_dahdi_dnd_on_finish (GamiManager *ami,
  * gami_manager_dahdi_dnd_off:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to turn off DND status
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set DND (Do Not Disturb) status on @dahdi_channel to off
@@ -2917,7 +2917,7 @@ gami_manager_dahdi_dnd_off (GamiManager *ami,
  * gami_manager_dahdi_dnd_off_async:
  * @ami: #GamiManager
  * @dahdi_channel: The DAHDI channel on which to turn off DND status
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -2969,8 +2969,8 @@ gami_manager_dahdi_dnd_off_finish (GamiManager *ami,
 /**
  * gami_manager_dahdi_show_channels:
  * @ami: #GamiManager
- * @dahdi_channel: (allow-none): Limit status information to this channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @dahdi_channel: Limit status information to this channel
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Show the status of all DAHDI channels
@@ -2996,8 +2996,8 @@ gami_manager_dahdi_show_channels (GamiManager *ami,
 /**
  * gami_manager_dahdi_show_channels_async:
  * @ami: #GamiManager
- * @dahdi_channel: (allow-none): Limit status information to this channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @dahdi_channel: Limit status information to this channel
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3047,7 +3047,7 @@ gami_manager_dahdi_show_channels_finish (GamiManager *ami,
  * gami_manager_dahdi_transfer:
  * @ami: #GamiManager
  * @dahdi_channel: The channel to be transferred
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Transfer DAHDI channel
@@ -3072,7 +3072,7 @@ gami_manager_dahdi_transfer (GamiManager *ami,
  * gami_manager_dahdi_transfer_async:
  * @ami: #GamiManager
  * @dahdi_channel: The channel to be transferred
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3122,7 +3122,7 @@ gami_manager_dahdi_transfer_finish (GamiManager *ami,
 /**
  * gami_manager_dahdi_restart:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Restart DAHDI channels. Any active calls will be terminated
@@ -3144,7 +3144,7 @@ gami_manager_dahdi_restart (GamiManager *ami,
 /**
  * gami_manager_dahdi_restart_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3196,7 +3196,7 @@ gami_manager_dahdi_restart_finish (GamiManager *ami,
 /**
  * gami_manager_agents:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * List information about all configured agents and their status
@@ -3219,7 +3219,7 @@ gami_manager_agents (GamiManager *ami,
 /**
  * gami_manager_agents_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3270,12 +3270,11 @@ gami_manager_agents_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @agent: The ID of the agent to log in
  * @exten: The extension to use as callback
- * @context: (allow-none): The context to use as callback
- * @ack_call: (allow-none): Whether calls should be acknowledged by the agent
- *            (by pressing #)
- * @wrapup_time: (allow-none): The minimum amount of time after hangup before
- *            the agent will receive a new call
- * @action_id: (allow-none): ActionID to ease response matching
+ * @context: The context to use as callback
+ * @ack_call: Whether calls should be acknowledged by the agent (by pressing #)
+ * @wrapup_time: The minimum amount of time after hangup before the agent
+ *               will receive a new call
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Log in @agent and register callback to @exten (note that the action has 
@@ -3312,12 +3311,11 @@ gami_manager_agent_callback_login (GamiManager *ami,
  * @ami: #GamiManager
  * @agent: The ID of the agent to log in
  * @exten: The extension to use as callback
- * @context: (allow-none): The context to use as callback
- * @ack_call: (allow-none): Whether calls should be acknowledged by the agent
- *            (by pressing #)
- * @wrapup_time: (allow-none): The minimum amount of time after hangup before
- *            the agent will receive a new call
- * @action_id: (allow-none): ActionID to ease response matching
+ * @context: The context to use as callback
+ * @ack_call: Whether calls should be acknowledged by the agent (by pressing #)
+ * @wrapup_time: The minimum amount of time after hangup before the agent
+ *               will receive a new call
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3387,7 +3385,7 @@ gami_manager_agent_callback_login_finish (GamiManager *ami,
  * gami_manager_agent_logoff:
  * @ami: #GamiManager
  * @agent: The ID of the agent to log off
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Log off @agent
@@ -3412,7 +3410,7 @@ gami_manager_agent_logoff (GamiManager *ami,
  * gami_manager_agent_logoff_async:
  * @ami: #GamiManager
  * @agent: The ID of the agent to log off
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3471,7 +3469,7 @@ gami_manager_agent_logoff_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @family: The AstDB key family from which to retrieve the value
  * @key: The name of the AstDB key
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve value of AstDB entry @family/@key
@@ -3499,7 +3497,7 @@ gami_manager_db_get (GamiManager *ami,
  * @ami: #GamiManager
  * @family: The AstDB key family from which to retrieve the value
  * @key: The name of the AstDB key
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3556,7 +3554,7 @@ gami_manager_db_get_finish (GamiManager *ami,
  * @family: The AstDB key family in which to set the value
  * @key: The name of the AstDB key
  * @val: The value to assign to the key
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set AstDB entry @family/@key to @value
@@ -3587,7 +3585,7 @@ gami_manager_db_put (GamiManager *ami,
  * @family: The AstDB key family in which to set the value
  * @key: The name of the AstDB key
  * @val: The value to assign to the key
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3645,7 +3643,7 @@ gami_manager_db_put_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @family: The AstDB key family in which to delete the key
  * @key: The name of the AstDB key to delete
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Remove AstDB entry @family/@key
@@ -3674,7 +3672,7 @@ gami_manager_db_del (GamiManager *ami,
  * @ami: #GamiManager
  * @family: The AstDB key family in which to delete the key
  * @key: The name of the AstDB key to delete
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3729,7 +3727,7 @@ gami_manager_db_del_finish (GamiManager *ami,
  * gami_manager_db_del_tree:
  * @ami: #GamiManager
  * @family: The AstDB key family to delete
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Remove AstDB key family
@@ -3754,7 +3752,7 @@ gami_manager_db_del_tree (GamiManager *ami,
  * gami_manager_db_del_tree_async:
  * @ami: #GamiManager
  * @family: The AstDB key family to delete
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3813,8 +3811,8 @@ gami_manager_db_del_tree_finish (GamiManager *ami,
  * @channel: Channel name to park
  * @channel2: Channel to announce park info to (and return the call to if the
  *            parking times out)
- * @timeout: (allow-none): Milliseconds to wait before callback
- * @action_id: (allow-none): ActionID to ease response matching
+ * @timeout: Milliseconds to wait before callback
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Park a channel in the parking lot
@@ -3845,8 +3843,8 @@ gami_manager_park (GamiManager *ami,
  * @channel: Channel name to park
  * @channel2: Channel to announce park info to (and return the call to if the
  *            parking times out)
- * @timeout: (allow-none): Milliseconds to wait before callback
- * @action_id: (allow-none): ActionID to ease response matching
+ * @timeout: Milliseconds to wait before callback
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3907,7 +3905,7 @@ gami_manager_park_finish (GamiManager *ami,
 /**
  * gami_manager_parked_calls:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of parked calls
@@ -3930,7 +3928,7 @@ gami_manager_parked_calls (GamiManager *ami,
 /**
  * gami_manager_parked_calls_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -3984,7 +3982,7 @@ gami_manager_parked_calls_finish (GamiManager *ami,
 /**
  * gami_manager_voicemail_users_list:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of voicemail users
@@ -4009,7 +4007,7 @@ gami_manager_voicemail_users_list (GamiManager *ami,
 /**
  * gami_manager_voicemail_users_list_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4060,7 +4058,7 @@ gami_manager_voicemail_users_list_finish (GamiManager *ami,
  * gami_manager_mailbox_count:
  * @ami: #GamiManager
  * @mailbox: The mailbox to check messages for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve count of new and old messages in @mailbox
@@ -4085,7 +4083,7 @@ gami_manager_mailbox_count (GamiManager *ami,
  * gami_manager_mailbox_count_async:
  * @ami: #GamiManager
  * @mailbox: The mailbox to check messages for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4137,7 +4135,7 @@ gami_manager_mailbox_count_finish (GamiManager *ami,
  * gami_manager_mailbox_status:
  * @ami: #GamiManager
  * @mailbox: The mailbox to check status for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Check the status of @mailbox
@@ -4162,7 +4160,7 @@ gami_manager_mailbox_status (GamiManager *ami,
  * gami_manager_mailbox_status_async:
  * @ami: #GamiManager
  * @mailbox: The mailbox to check status for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4216,7 +4214,7 @@ gami_manager_mailbox_status_finish (GamiManager *ami,
 /**
  * gami_manager_core_status:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve information about the current PBX core status (as active calls,
@@ -4239,7 +4237,7 @@ gami_manager_core_status (GamiManager *ami,
 /**
  * gami_manager_core_status_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4289,7 +4287,7 @@ gami_manager_core_status_finish (GamiManager *ami,
 /**
  * gami_manager_core_show_channels:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of currently active channels
@@ -4314,7 +4312,7 @@ gami_manager_core_show_channels (GamiManager *ami,
 /**
  * gami_manager_core_show_channels_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4362,7 +4360,7 @@ gami_manager_core_show_channels_finish (GamiManager *ami,
 /**
  * gami_manager_core_settings:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve information about PBX core settings (as Asterisk/GAMI version etc.)
@@ -4384,7 +4382,7 @@ gami_manager_core_settings (GamiManager *ami,
 /**
  * gami_manager_core_settings_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4435,7 +4433,7 @@ gami_manager_core_settings_finish (GamiManager *ami,
 /**
  * gami_manager_iax_peer_list:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of IAX2 peers
@@ -4458,7 +4456,7 @@ gami_manager_iax_peer_list (GamiManager *ami,
 /**
  * gami_manager_iax_peer_list_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4506,7 +4504,7 @@ gami_manager_iax_peer_list_finish (GamiManager *ami,
 /**
  * gami_manager_sip_peers:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a list of SIP peers
@@ -4529,7 +4527,7 @@ gami_manager_sip_peers (GamiManager *ami,
 /**
  * gami_manager_sip_peers_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4579,7 +4577,7 @@ gami_manager_sip_peers_finish (GamiManager *ami,
  * gami_manager_sip_show_peer:
  * @ami: #GamiManager
  * @peer: SIP peer to get status information for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve status information for @peer
@@ -4604,7 +4602,7 @@ gami_manager_sip_show_peer (GamiManager *ami,
  * gami_manager_sip_show_peer_async:
  * @ami: #GamiManager
  * @peer: SIP peer to get status information for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4654,7 +4652,7 @@ gami_manager_sip_show_peer_finish (GamiManager *ami,
 /**
  * gami_manager_sip_show_registry:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve registry information of SIP peers
@@ -4679,7 +4677,7 @@ gami_manager_sip_show_registry (GamiManager *ami,
 /**
  * gami_manager_sip_show_registry_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4727,8 +4725,8 @@ gami_manager_sip_show_registry_finish (GamiManager *ami,
 /**
  * gami_manager_status:
  * @ami: #GamiManager
- * @channel: (allow-none): Only retrieve status information for this channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @channel: Only retrieve status information for this channel
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve status information of active channels (or @channel)
@@ -4753,8 +4751,8 @@ gami_manager_status (GamiManager *ami,
 /**
  * gami_manager_status_async:
  * @ami: #GamiManager
- * @channel: (allow-none): Only retrieve status information for this channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @channel: Only retrieve status information for this channel
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4808,7 +4806,7 @@ gami_manager_status_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @exten: The name of the extension to check
  * @context: The context of the extension to check
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Check extension state of @exten@@context - if hints are properly configured
@@ -4838,7 +4836,7 @@ gami_manager_extension_state (GamiManager *ami,
  * @ami: #GamiManager
  * @exten: The name of the extension to check
  * @context: The context of the extension to check
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4893,7 +4891,7 @@ gami_manager_extension_state_finish (GamiManager *ami,
 /**
  * gami_manager_ping:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Query the Asterisk server to make sure it is still responding. May be used
@@ -4916,7 +4914,7 @@ gami_manager_ping (GamiManager *ami,
 /**
  * gami_manager_ping_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -4967,7 +4965,7 @@ gami_manager_ping_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to set the timeout for
  * @timeout: The maximum duration of the current call, in seconds
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set timeout for call on @channel to @timeout seconds
@@ -4995,7 +4993,7 @@ gami_manager_absolute_timeout (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to set the timeout for
  * @timeout: The maximum duration of the current call, in seconds
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5054,7 +5052,7 @@ gami_manager_absolute_timeout_finish (GamiManager *ami,
  * gami_manager_challenge:
  * @ami: #GamiManager
  * @auth_type: The authentification type to generate challenge for (e.g. "md5")
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Retrieve a challenge string to use for authentification of type @auth_type
@@ -5079,7 +5077,7 @@ gami_manager_challenge (GamiManager *ami,
  * gami_manager_challenge_async:
  * @ami: #GamiManager
  * @auth_type: The authentification type to generate challenge for (e.g. "md5")
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5133,8 +5131,8 @@ gami_manager_challenge_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to set @user_field for
  * @user_field: The value for the CDR user field
- * @append: (allow-none): Whether to append @user_field to current value
- * @action_id: (allow-none): ActionID to ease response matching
+ * @append: Whether to append @user_field to current value
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set CDR user field for @channel
@@ -5166,8 +5164,8 @@ gami_manager_set_cdr_user_field (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to set @user_field for
  * @user_field: The value for the CDR user field
- * @append: (allow-none): Whether to append @user_field to current value
- * @action_id: (allow-none): ActionID to ease response matching
+ * @append: Whether to append @user_field to current value
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5226,9 +5224,8 @@ gami_manager_set_cdr_user_field_finish (GamiManager *ami,
 /**
  * gami_manager_reload:
  * @ami: #GamiManager
- * @module: (allow-none): The name of the module to reload (not including
- *           extension)
- * @action_id: (allow-none): ActionID to ease response matching
+ * @module: The name of the module to reload (not including extension)
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Reload @module or all modules
@@ -5252,9 +5249,8 @@ gami_manager_reload (GamiManager *ami,
 /**
  * gami_manager_reload_async:
  * @ami: #GamiManager
- * @module: (allow-none): The name of the module to reload (not including
- *           extension)
- * @action_id: (allow-none): ActionID to ease response matching
+ * @module: The name of the module to reload (not including extension)
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5305,7 +5301,7 @@ gami_manager_reload_finish (GamiManager *ami,
  * gami_manager_hangup:
  * @ami: #GamiManager
  * @channel: The name of the channel to hang up
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Hang up @channel
@@ -5330,7 +5326,7 @@ gami_manager_hangup (GamiManager *ami,
  * gami_manager_hangup_async:
  * @ami: #GamiManager
  * @channel: The name of the channel to hang up
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5383,11 +5379,11 @@ gami_manager_hangup_finish (GamiManager *ami,
  * gami_manager_redirect:
  * @ami: #GamiManager
  * @channel: The name of the channel redirect
- * @extra_channel: (allow-none): Second call leg to transfer
+ * @extra_channel: Second call leg to transfer
  * @exten: The extension @channel should be redirected to
  * @context: The context @channel should be redirected to
  * @priority: The priority @channel should be redirected to
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Redirect @channel to @exten@@context:@priority
@@ -5420,11 +5416,11 @@ gami_manager_redirect (GamiManager *ami,
  * gami_manager_redirect_async:
  * @ami: #GamiManager
  * @channel: The name of the channel redirect
- * @extra_channel: (allow-none): Second call leg to transfer
+ * @extra_channel: Second call leg to transfer
  * @exten: The extension @channel should be redirected to
  * @context: The context @channel should be redirected to
  * @priority: The priority @channel should be redirected to
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5488,7 +5484,7 @@ gami_manager_redirect_finish (GamiManager *ami,
  * @channel1: The name of the channel to bridge to @channel2
  * @channel2: The name of the channel to bridge to @channel1
  * @tone: Whether to play courtesy tone to @channel2
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Bridge together the existing channels @channel1 and @channel2
@@ -5519,7 +5515,7 @@ gami_manager_bridge (GamiManager *ami,
  * @channel1: The name of the channel to bridge to @channel2
  * @channel2: The name of the channel to bridge to @channel1
  * @tone: Whether to play courtesy tone to @channel2
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5581,8 +5577,8 @@ gami_manager_bridge_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to execute @command in
  * @command: The name of the AGI command to execute
- * @command_id: (allow-none): CommandID for matching in AGI notification events
- * @action_id: (allow-none): ActionID to ease response matching
+ * @command_id: CommandID for matching in AGI notification events
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Execute AGI command @command in @channel
@@ -5612,8 +5608,8 @@ gami_manager_agi (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to execute @command in
  * @command: The name of the AGI command to execute
- * @command_id: (allow-none): CommandID for matching in AGI notification events
- * @action_id: (allow-none): ActionID to ease response matching
+ * @command_id: CommandID for matching in AGI notification events
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5671,7 +5667,7 @@ gami_manager_agi_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to send @message to
  * @message: The message to send to @channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Send @message to @channel
@@ -5699,7 +5695,7 @@ gami_manager_send_text (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to send @message to
  * @message: The message to send to @channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5756,7 +5752,7 @@ gami_manager_send_text_finish (GamiManager *ami,
  * @jabber: Jabber / GTalk account to send message from
  * @screen_name: Jabber / GTalk account to send message to
  * @message: The message to send
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Send @message from Jabber / GTalk account @jabber to account @screen_name
@@ -5787,7 +5783,7 @@ gami_manager_jabber_send (GamiManager *ami,
  * @jabber: Jabber / GTalk account to send message from
  * @screen_name: Jabber / GTalk account to send message to
  * @message: The message to send
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5845,7 +5841,7 @@ gami_manager_jabber_send_finish (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to send @digit to
  * @digit: The DTMF digit to play on @channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Play a DTMF digit @digit on @channel
@@ -5873,7 +5869,7 @@ gami_manager_play_dtmf (GamiManager *ami,
  * @ami: #GamiManager
  * @channel: The name of the channel to send @digit to
  * @digit: The DTMF digit to play on @channel
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -5932,7 +5928,7 @@ gami_manager_play_dtmf_finish (GamiManager *ami,
 /**
  * gami_manager_list_commands:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * List available Asterisk manager commands - the available actions may vary
@@ -5956,7 +5952,7 @@ gami_manager_list_commands (GamiManager *ami,
 /**
  * gami_manager_list_commands_async:
  * @ami: #GamiManager
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -6008,7 +6004,7 @@ gami_manager_list_commands_finish (GamiManager *ami,
  * gami_manager_list_categories:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to list categories for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * List categories in @filename
@@ -6034,7 +6030,7 @@ gami_manager_list_categories (GamiManager *ami,
  * gami_manager_list_categories_async:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to list categories for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -6087,7 +6083,7 @@ gami_manager_list_categories_finish (GamiManager *ami,
  * gami_manager_get_config:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to get content for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Get content of configuration file @filename
@@ -6113,7 +6109,7 @@ gami_manager_get_config (GamiManager *ami,
  * gami_manager_get_config_async:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to get content for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -6167,7 +6163,7 @@ gami_manager_get_config_finish (GamiManager *ami,
  * gami_manager_get_config_json:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to get content for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Get content of configuration file @filename as JS hash for use with JSON
@@ -6193,7 +6189,7 @@ gami_manager_get_config_json (GamiManager *ami,
  * gami_manager_get_config_json_async:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to get content for
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -6246,7 +6242,7 @@ gami_manager_get_config_json_finish (GamiManager *ami,
  * gami_manager_create_config:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to create
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Create an empty configurion file @filename
@@ -6271,7 +6267,7 @@ gami_manager_create_config (GamiManager *ami,
  * gami_manager_create_config_async:
  * @ami: #GamiManager
  * @filename: The name of the configuration file to create
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -6331,16 +6327,16 @@ gami_manager_create_config_finish (GamiManager *ami,
  *                     @priority)
  * @data_context: Context to dial or data to pass to application (depending on
  *                @priority)
- * @priority: (allow-none): Priority to dial - if %NULL, @application_exten will
- *            be interpretated as application and @data_context as data
- * @timeout: (allow-none): Time to wait for @channel to answer in milliseconds
- * @caller_id: (allow-none): CallerID to set on the outgoing channel
- * @account: (allow-none): AccountCode to set for the call
- * @variables: (allow-none): A #GHashTable with name / value pairs to pass as 
- *             channel variables
- * @async: (allow-none): Whether to originate call asynchronously - this allows
- *         to originate further calls before a response is received
- * @action_id: (allow-none): ActionID to ease response matching
+ * @priority: Priority to dial - if %NULL, @application_exten will be
+ *            interpretated as application and @data_context as data
+ * @timeout: Time to wait for @channel to answer in milliseconds
+ * @caller_id: CallerID to set on the outgoing channel
+ * @account: AccountCode to set for the call
+ * @variables: A #GHashTable with name / value pairs to pass as channel
+ *             variables
+ * @async: Whether to originate call asynchronously - this allows to originate
+ *         further calls before a response is received
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Generate an outbound call from Asterisk and connect the channel to
@@ -6388,16 +6384,16 @@ gami_manager_originate (GamiManager *ami,
  *                     @priority)
  * @data_context: Context to dial or data to pass to application (depending on
  *                @priority)
- * @priority: (allow-none): Priority to dial - if %NULL, @application_exten will
- *            be interpretated as application and @data_context as data
- * @timeout: (allow-none): Time to wait for @channel to answer in milliseconds
- * @caller_id: (allow-none): CallerID to set on the outgoing channel
- * @account: (allow-none): AccountCode to set for the call
- * @variables: (allow-none): A #GHashTable with name / value pairs to pass as 
- *             channel variables
- * @async: (allow-none): Whether to originate call asynchronously - this allows
- *         to originate further calls before a response is received
- * @action_id: (allow-none): ActionID to ease response matching
+ * @priority: Priority to dial - if %NULL, @application_exten will be
+ *            interpretated as application and @data_context as data
+ * @timeout: Time to wait for @channel to answer in milliseconds
+ * @caller_id: CallerID to set on the outgoing channel
+ * @account: AccountCode to set for the call
+ * @variables: A #GHashTable with name / value pairs to pass as channel
+ *             variables
+ * @async: Whether to originate call asynchronously - this allows to originate
+ *         further calls before a response is received
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -6488,7 +6484,7 @@ gami_manager_originate_finish (GamiManager *ami,
  * gami_manager_events:
  * @ami: #GamiManager
  * @event_mask: #GamiEventMask to set for the connection
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Set #GamiEventMask for the connection to control which events shall be
@@ -6514,7 +6510,7 @@ gami_manager_events (GamiManager *ami,
  * gami_manager_events_async:
  * @ami: #GamiManager
  * @event_mask: #GamiEventMask to set for the connection
- * @action_id: (allow-none): ActionID to ease response matching
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -6571,8 +6567,8 @@ gami_manager_events_finish (GamiManager *ami,
  * gami_manager_user_event:
  * @ami: #GamiManager
  * @user_event: The user defined event to send
- * @headers: (allow-none): Optional header to add to the event
- * @action_id: (allow-none): ActionID to ease response matching
+ * @headers: Optional header to add to the event
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Send the user defined event @user_event with an optional payload of @headers
@@ -6599,8 +6595,8 @@ gami_manager_user_event (GamiManager *ami,
  * gami_manager_user_event_async:
  * @ami: #GamiManager
  * @user_event: The user defined event to send
- * @headers: (allow-none): Optional header to add to the event
- * @action_id: (allow-none): ActionID to ease response matching
+ * @headers: Optional header to add to the event
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *
@@ -6686,8 +6682,8 @@ gami_manager_user_event_finish (GamiManager *ami,
 /**
  * gami_manager_wait_event:
  * @ami: #GamiManager
- * @timeout: (allow-none): Maximum time to wait for events in seconds
- * @action_id: (allow-none): ActionID to ease response matching
+ * @timeout: Maximum time to wait for events in seconds
+ * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
  *
  * Wait for an event to occur
@@ -6711,8 +6707,8 @@ gami_manager_wait_event (GamiManager *ami,
 /**
  * gami_manager_wait_event_async:
  * @ami: #GamiManager
- * @timeout: (allow-none): Maximum time to wait for events in seconds
- * @action_id: (allow-none): ActionID to ease response matching
+ * @timeout: Maximum time to wait for events in seconds
+ * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
  * @user_data: User data to pass to the callback.
  *

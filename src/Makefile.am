@@ -1,6 +1,6 @@
 NULL =
 
-EXTRA_DIST =
+EXTRA_DIST = gami.c
 
 DISTCLEANFILES =
 
@@ -67,18 +67,22 @@ gami-enumtypes.c: gami-enumtypes.c.template $(gami_headers)
 if ENABLE_INTROSPECTION
 
 GAmi-1.0.gir: libgami-1.0.la Makefile gami.h
-	$(G_IR_SCANNER) -v --namespace GAmi --nsversion=1.0 \
+	$(G_IR_SCANNER) \
+		--namespace GAmi --nsversion=1.0 \
 		--add-include-path=$(top_srcdir)/src --add-include-path=. \
-		--include=GObject-2.0 \
-		--library=gami-1.0 \
-		--libtool="$(LIBTOOL)" \
 		--output $@ \
+		--libtool="$(LIBTOOL)" \
+		--c-include=gami.h \
+		--include=GObject-2.0 \
+		--include=Gio-2.0 \
+		--library=gami-1.0 \
 		--pkg gobject-2.0 \
 		--pkg gio-2.0 \
 		-I$(top_srcdir)/src \
 		$(GAMI_CFLAGS) \
 		-DGAMI_COMPILATION \
-		$(gamisubinclude_HEADERS:%=$(top_srcdir)/src/%)
+		$(top_srcdir)/src/gami.c \
+		$(gamisubinclude_HEADERS)
 
 girdir = $(GIRDIR)
 gir_DATA = GAmi-1.0.gir
