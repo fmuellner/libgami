@@ -651,26 +651,34 @@ emit_event (gpointer data)
 gboolean
 bool_hook (gpointer data)
 {
-    GHashTable *pkt;
+    GamiPacket *packet;
     gchar *response, *action_id, *message;
     GSimpleAsyncResult *simple;
     gboolean success;
 
-    pkt = ((GamiHookData *) data)->packet->parsed;
+    packet = ((GamiHookData *) data)->packet;
 
-    g_return_val_if_fail (pkt != NULL, TRUE);
+    g_return_val_if_fail (packet != NULL, TRUE);
 
-    response = g_hash_table_lookup (pkt, "Response");
+    if (packet->handled)
+        return TRUE;
 
-    g_return_val_if_fail (response, TRUE);
+    g_return_val_if_fail (packet->parsed != NULL, TRUE);
 
-    action_id = g_hash_table_lookup (pkt, "ActionID");
+    response = g_hash_table_lookup (packet->parsed, "Response");
+
+    if (! response)
+        return TRUE;
+
+    action_id = g_hash_table_lookup (packet->parsed, "ActionID");
     if (action_id
         && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
         return TRUE;
 
+    packet->handled = TRUE;
+
     success = ! g_strcmp0 (response, ((GamiHookData *) data)->handler_data);
-    message = g_hash_table_lookup (pkt, "Message");
+    message = g_hash_table_lookup (packet->parsed, "Message");
 
     simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
 
@@ -690,29 +698,35 @@ bool_hook (gpointer data)
 gboolean
 string_hook (gpointer data)
 {
-    GHashTable *pkt;
+    GamiPacket *packet;
     gchar *response, *result, *action_id, *message;
     GSimpleAsyncResult *simple;
 
-    pkt = ((GamiHookData *) data)->packet->parsed;
+    packet = ((GamiHookData *) data)->packet;
 
-    g_return_val_if_fail (pkt != NULL, TRUE);
+    if (packet->handled)
+        return TRUE;
+    g_return_val_if_fail (packet->parsed != NULL, TRUE);
 
-    response = g_hash_table_lookup (pkt, "Response");
+    response = g_hash_table_lookup (packet->parsed, "Response");
 
-    g_return_val_if_fail (response, TRUE);
+    if (! response)
+        return TRUE;
 
-    action_id = g_hash_table_lookup (pkt, "ActionID");
+    action_id = g_hash_table_lookup (packet->parsed, "ActionID");
     if (action_id
         && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
         return TRUE;
 
-    result = g_hash_table_lookup (pkt, ((GamiHookData *) data)->handler_data);
-    message = g_hash_table_lookup (pkt, "Message");
+    packet->handled = TRUE;
+    result = g_hash_table_lookup (packet->parsed,
+                                  ((GamiHookData *) data)->handler_data);
+    message = g_hash_table_lookup (packet->parsed, "Message");
 
     simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
 
-    if (! g_strcmp0 (g_hash_table_lookup (pkt, "Response"), "Success")
+    if (! g_strcmp0 (g_hash_table_lookup (packet->parsed, "Response"),
+                     "Success")
         && result)
         g_simple_async_result_set_op_res_gpointer (simple,
                                                    g_strdup (result),
@@ -731,35 +745,41 @@ string_hook (gpointer data)
 gboolean
 hash_hook (gpointer data)
 {
-    GHashTable *pkt;
+    GamiPacket *packet;
     gchar *response, *action_id, *message;
     GSimpleAsyncResult *simple;
 
-    pkt = ((GamiHookData *) data)->packet->parsed;
+    packet = ((GamiHookData *) data)->packet;
 
-    g_return_val_if_fail (pkt != NULL, TRUE);
+    if (packet->handled)
+        return TRUE;
+    g_return_val_if_fail (packet->parsed != NULL, TRUE);
 
-    response = g_hash_table_lookup (pkt, "Response");
+    response = g_hash_table_lookup (packet->parsed, "Response");
 
-    g_return_val_if_fail (response, TRUE);
+    if (! response)
+        return TRUE;
 
-    action_id = g_hash_table_lookup (pkt, "ActionID");
+    action_id = g_hash_table_lookup (packet->parsed, "ActionID");
     if (action_id
         && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
         return TRUE;
 
-    message = g_hash_table_lookup (pkt, "Message");
+    message = g_hash_table_lookup (packet->parsed, "Message");
 
     simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
 
-    if (! g_strcmp0 (g_hash_table_lookup (pkt, "Response"), "Success")) {
-        GDestroyNotify hash_free = (GDestroyNotify) g_hash_table_unref;
+    if (! g_strcmp0 (g_hash_table_lookup (packet->parsed, "Response"),
+                     "Success")) {
+        GHashTable     *res;
+        GDestroyNotify  hash_free;
 
-        g_hash_table_remove (pkt, "Response");
-        g_hash_table_remove (pkt, "Message");
-        g_simple_async_result_set_op_res_gpointer (simple,
-                                                   g_hash_table_ref (pkt),
-                                                   hash_free);
+        res = g_hash_table_ref (packet->parsed);
+        hash_free = (GDestroyNotify) g_hash_table_unref;
+
+        g_hash_table_remove (res, "Response");
+        g_hash_table_remove (res, "Message");
+        g_simple_async_result_set_op_res_gpointer (simple, res, hash_free);
     } else
         g_simple_async_result_set_error (simple,
                                          GAMI_ERROR,
