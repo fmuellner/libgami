@@ -21,42 +21,6 @@ Which parts of the Asterisk Manager API are currently missing
     <itemizedlist>
         <listitem>
             <formalpara>
-	        <title>QueueRule</title>
-	        <para>
-                    The QueueRule action lacks documentation, and is therefore 
-                    unimplemented. It is a recent addition to asterisk and will 
-                    hopefully be improved to behave properly - for the time
-                    being, it returns a completely empty package too often.
-                </para>
-            </formalpara>
-        </listitem>
-        <listitem>
-            <formalpara>
-                <title>QueueStatus</title>
-                <para>
-                    The QueueStatus action returns a list of queues including a
-                    list of queue members for each of them. There is probably
-                    no way to implement this using GLib standard types,
-                    although it should be pretty easy to implement using a
-                    dedicated data type.
-                </para>
-            </formalpara>
-        </listitem>
-        <listitem>
-            <formalpara>
-                <title>Queues</title>
-                <para>
-                    The Queues action does not return a proper response package 
-                    but text as outputted by the <command>queues show</command>
-                    CLI command. With the current architecture it is quite
-                    difficult to implement, and as there are functional
-                    equivalent actions which return proper packages, it will
-                    probably remain unimplemented
-                </para>
-            </formalpara>
-        </listitem>
-        <listitem>
-            <formalpara>
                 <title>IAXnetstats</title>
                 <para>
                    The IAXnetstats action is another recent API addition, which

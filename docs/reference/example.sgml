@@ -23,14 +23,15 @@
 #include <gami.h>
 
 void
-gami_ping_cb (GamiResponse *response, gpointer data)
+gami_ping_cb (GamiManager *ami, GAsyncResult *result, gpointer data)
 {
-	GMainLoop *loop = data;
+	GMainLoop *loop  = data;
+	GError    *error = NULL;
 
-	if (gami_response_success (response))
+	if (gami_manager_ping_finish (ami, result, &error))
 		printf ("PONG!\n");
 	else
-		printf ("Failed to ping server.\n");
+		printf ("Failed to ping server: %s.\n", error->message);
 	
 	g_main_loop_quit (loop);
 }
@@ -40,7 +41,6 @@ main (int argc, char *argv [])
 {
 	GMainLoop    *loop;
 	GamiManager  *manager;
-	GamiResponse *response;
 
 	gami_init (&argc, &argv);
 
@@ -49,23 +49,16 @@ main (int argc, char *argv [])
 	manager = gami_manager_new ("localhost", "5038");
 	g_assert (manager != NULL);
 
-	response = gami_manager_login (manager, "foo", "bar",
-	                               NULL, GAMI_EVENT_MASK_NONE,
-	                               NULL, NULL, NULL, NULL);
+	if (gami_manager_login (manager, "foo", "bar", NULL,
+				GAMI_EVENT_MASK_NONE, NULL, NULL)) {
 	
-	g_assert (gami_response_success (response));
-	gami_response_unref (response);
+		gami_manager_ping_async (manager, NULL,
+		                         gami_ping_cb, (gpointer) loop);
 
-	response = gami_manager_ping (manager, NULL,
-	                              gami_ping_cb, (gpointer) loop, NULL);
-
-	g_assert (gami_response_success (response));
-	gami_response_unref (response);
-
-	g_main_loop_run (loop);
+	        g_main_loop_run (loop);
+	}
 	
-	response = gami_manager_logoff (manager, NULL, NULL, NULL, NULL);
-	gami_response_unref (response);
+	gami_manager_logoff (manager, NULL, NULL);
 
 	return 0;
 }
