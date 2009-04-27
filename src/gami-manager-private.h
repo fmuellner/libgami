@@ -4,6 +4,7 @@
 #include <glib.h>
 #include <glib-object.h>
 #include <gami-manager.h>
+#include <gami-manager-types.h>
 #include <gami-error.h>
 
 typedef struct _GamiManagerPrivate GamiManagerPrivate;
@@ -161,12 +162,15 @@ void set_sync_result (GObject *ami, GAsyncResult *result, gpointer data);
 gboolean check_response (GHashTable *p, const gchar *expected_value);
 
 /* hook functions */
-gboolean parse_packet (gpointer data);
-gboolean emit_event   (gpointer data);
-gboolean bool_hook    (gpointer data);
-gboolean string_hook  (gpointer data);
-gboolean hash_hook    (gpointer data);
-gboolean list_hook    (gpointer data);
+gboolean parse_packet      (gpointer data);
+gboolean emit_event        (gpointer data);
+gboolean bool_hook         (gpointer data);
+gboolean string_hook       (gpointer data);
+gboolean hash_hook         (gpointer data);
+gboolean list_hook         (gpointer data);
+gboolean text_hook         (gpointer data);
+gboolean queue_rule_hook   (gpointer data);
+gboolean queue_status_hook (gpointer data);
 
 gboolean reconnect_socket (GamiManager *ami);
 

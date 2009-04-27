@@ -20,6 +20,7 @@ libgami_1_0_la_SOURCES =          \
         gami-main.h               \
         gami-manager.c            \
         gami-manager.h            \
+	gami-manager-types.h      \
         gami-manager-private.c    \
         gami-manager-private.h    \
         gami-enums.h              \
@@ -37,6 +38,7 @@ gamiinclude_HEADERS = gami.h
 gami_headers =                    \
 	gami-main.h               \
 	gami-manager.h            \
+	gami-manager-types.h      \
 	gami-enums.h              \
 	gami-error.h              \
 	$(NULL)

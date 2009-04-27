@@ -241,6 +241,40 @@
  */
 
 /**
+ * gami_manager_queue_rule:
+ * @rule: (allow-none):
+ * @action_id: (allow-none):
+ */
+
+/**
+ * gami_manager_queue_rule_async:
+ * @rule: (allow-none):
+ * @action_id: (allow-none):
+ */
+
+/**
+ * gami_manager_queue_status:
+ * @queue: (allow-none):
+ * @action_id: (allow-none):
+ */
+
+/**
+ * gami_manager_queue_status_async:
+ * @queue: (allow-none):
+ * @action_id: (allow-none):
+ */
+
+/**
+ * gami_manager_queues:
+ * @action_id: (allow-none):
+ */
+
+/**
+ * gami_manager_queues_async:
+ * @action_id: (allow-none):
+ */
+
+/**
  * gami_manager_zap_dial_offhook:
  * @action_id: (allow-none):
  */

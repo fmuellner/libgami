@@ -17,16 +17,30 @@
  * along with this library;  if not, see <http://www.gnu.org/licenses/>.
  */
 
-#ifndef __GAMI_H__
-#define __GAMI_H__
 
-#define __GAMI_H_INSIDE__
-
-#include <gami/gami-enums.h>
-#include <gami/gami-enumtypes.h>
-#include <gami/gami-main.h>
-#include <gami/gami-manager.h>
-#include <gami/gami-manager-types.h>
-
-#undef __GAMI_H_INSIDE__
+#if !defined(__GAMI_H_INSIDE__) && !defined (GAMI_COMPILATION)
+#  error "Only <gami.h> can be included directly."
 #endif
+
+#ifndef __GAMI_MANAGER_TYPES_H__
+#define __GAMI_MANAGER_TYPES_H__
+
+G_BEGIN_DECLS
+
+typedef struct _GamiQueueRule        GamiQueueRule;
+typedef struct _GamiQueueStatusEntry GamiQueueStatusEntry;
+
+struct _GamiQueueRule {
+	gint   seconds;
+	gchar *max_penalty_change;
+	gchar *min_penalty_change;
+};
+
+struct _GamiQueueStatusEntry {
+	GHashTable *params;
+	GSList     *members;
+};
+
+G_END_DECLS
+
+#endif /* __GAMI_MANAGER_TYPES_H__ */

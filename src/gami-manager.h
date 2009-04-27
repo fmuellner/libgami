@@ -457,7 +457,19 @@ gboolean gami_manager_queue_log_finish (GamiManager *ami,
                                         GAsyncResult *result,
                                         GError **error);
 
-/*
+GHashTable *gami_manager_queue_rule (GamiManager *ami,
+                                     const gchar *rule,
+                                     const gchar *action_id,
+                                     GError **error);
+void gami_manager_queue_rule_async (GamiManager *ami,
+                                    const gchar *rule,
+                                    const gchar *action_id,
+                                    GAsyncReadyCallback callback,
+                                    gpointer user_data);
+GHashTable *gami_manager_queue_rule_finish (GamiManager *ami,
+                                            GAsyncResult *result,
+                                            GError **error);
+
 GSList *gami_manager_queue_status (GamiManager *ami,
                                    const gchar *queue,
                                    const gchar *action_id,
@@ -470,7 +482,17 @@ void gami_manager_queue_status_async (GamiManager *ami,
 GSList *gami_manager_queue_status_finish (GamiManager *ami,
                                           GAsyncResult *result,
                                           GError **error);
-*/
+
+gchar *gami_manager_queues (GamiManager *ami,
+                            const gchar *action_id,
+                            GError **error);
+void gami_manager_queues_async (GamiManager *ami,
+                                const gchar *action_id,
+                                GAsyncReadyCallback callback,
+                                gpointer user_data);
+gchar *gami_manager_queues_finish (GamiManager *ami,
+                                   GAsyncResult *result,
+                                   GError **error);
 
 gboolean gami_manager_zap_dial_offhook (GamiManager *ami,
                                         const gchar *zap_channel,
@@ -1247,4 +1269,4 @@ gboolean gami_manager_wait_event_finish (GamiManager *ami,
 
 G_END_DECLS
 
-#endif /* _AMI_MANAGER_H_ */
+#endif /* __GAMI_MANAGER_H__ */

@@ -615,8 +615,8 @@ parse_packet (gpointer data)
             key = g_strdup (tokens [0]);
             value = g_strdup (tokens [1]);
 
-            g_hash_table_insert (pkt->parsed, key, value);
             g_debug ("   %s: %s", key, value);
+            g_hash_table_insert (pkt->parsed, key, value);
         }
         g_strfreev (tokens);
     }
@@ -641,6 +641,9 @@ emit_event (gpointer data)
 
     if (g_hash_table_lookup (pkt, "Response")
         || g_hash_table_lookup (pkt, "ActionID"))
+        return TRUE;
+
+    if (! g_hash_table_lookup (pkt, "Event"))
         return TRUE;
 
     g_signal_emit (ami, signals [EVENT], 0, pkt);
@@ -850,4 +853,213 @@ list_hook (gpointer data)
 
         return ! finished;
     }
+}
+
+void
+gami_queue_rule_free (GamiQueueRule *rule)
+{
+    g_free (rule->max_penalty_change);
+    g_free (rule->min_penalty_change);
+    g_free (rule);
+}
+
+void
+gami_queue_rule_list_free (GSList *list)
+{
+    g_slist_foreach (list, (GFunc) gami_queue_rule_free, NULL);
+    g_slist_free (list);
+}
+
+gboolean
+queue_rule_hook (gpointer data)
+{
+    GHashTable  *res;
+    GamiPacket  *packet;
+    gchar       *action_id,
+                *rule;
+    gchar      **lines,
+               **line;
+    GSList      *rule_list;
+
+    GSimpleAsyncResult  *simple;
+    GDestroyNotify       hash_free;
+
+    packet = ((GamiHookData *) data)->packet;
+
+    if (packet->handled)
+        return TRUE;
+
+    if (packet->parsed) {
+        /* right now, asterisk ignores any ActionID parameter - this might
+         * change though, so check for it anyways ....
+         */
+        action_id = g_hash_table_lookup (packet->parsed, "ActionID");
+        if (action_id
+            && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
+            return TRUE;
+    }
+
+    packet->handled = TRUE;
+
+    simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
+
+    res = g_hash_table_new_full (g_str_hash,
+                                 g_str_equal,
+                                 g_free,
+                                 (GDestroyNotify) gami_queue_rule_list_free);
+    rule_list = NULL;
+    rule      = NULL;
+    lines     = g_strsplit (packet->raw, "\r\n", -1);
+    for (line = lines; *line; line++) {
+        if (g_str_has_prefix (*line, "RuleList: ")) {
+            if (rule) {
+                g_hash_table_insert (res,
+                                     g_strdup (rule),
+                                     g_slist_reverse (rule_list));
+                rule = NULL;
+                rule_list = NULL;
+            }
+            rule = *line + strlen ("RuleList: ");
+        } else if (g_str_has_prefix (*line, "Rule: ")) {
+            GamiQueueRule  *queue_rule;
+            gchar         **items;
+
+            items = g_strsplit (*line + strlen ("Rule: "), ",", 3);
+
+            queue_rule = g_new0 (GamiQueueRule, 1);
+            queue_rule->seconds            = atoi (items [0]);
+            queue_rule->max_penalty_change = g_strdup (items [1]);
+            queue_rule->min_penalty_change = g_strdup (items [2]);
+
+            rule_list = g_slist_prepend (rule_list, queue_rule);
+            g_strfreev (items);
+        }
+    }
+
+    if (rule)
+        g_hash_table_insert (res,
+                             g_strdup (rule),
+                             g_slist_reverse (rule_list));
+
+    g_strfreev (lines);
+
+    hash_free = (GDestroyNotify) g_hash_table_unref;
+
+    g_simple_async_result_set_op_res_gpointer (simple, res, hash_free);
+    g_simple_async_result_complete_in_idle (simple);
+
+    return FALSE;
+}
+
+gboolean
+queue_status_hook (gpointer data)
+{
+    GHashTable *pkt;
+    gchar *response, *action_id;
+    GSimpleAsyncResult *simple;
+
+    pkt = ((GamiHookData *) data)->packet->parsed;
+
+    g_return_val_if_fail (pkt != NULL, TRUE);
+
+    action_id = g_hash_table_lookup (pkt, "ActionID");
+    if (action_id
+        && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
+        return TRUE;
+
+    simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
+
+    if ((response = g_hash_table_lookup (pkt, "Response"))) {
+        gchar *message;
+        gboolean success;
+
+        success = ! g_strcmp0 (response, "Success");
+        message = g_hash_table_lookup (pkt, "Message");
+
+        if (success) {
+            return TRUE;
+        } else {
+            g_simple_async_result_set_error (simple,
+                                             GAMI_ERROR,
+                                             GAMI_ERROR_FAILED,
+                                             message ? message
+                                                     : "Action failed");
+            return FALSE;
+        }
+
+    } else {
+        GSList *list;
+        gchar *event;
+        gboolean finished;
+        GDestroyNotify list_free = (GDestroyNotify) free_list_result;
+
+        event = g_hash_table_lookup (pkt, "Event");
+        list = (GSList *) g_simple_async_result_get_op_res_gpointer (simple);
+        finished = ! g_strcmp0 (event, ((GamiHookData *) data)->handler_data);
+
+        if (! finished) {
+            GamiQueueStatusEntry *current = NULL;
+            GSList *members = NULL;
+            
+            g_hash_table_remove (pkt, "Event");
+
+            if (list) {
+                current = (GamiQueueStatusEntry *) list->data;
+                members = current->members;
+            }
+
+            if (! g_strcmp0 (event, "QueueParams")) {
+                if (members)
+                    current->members = g_slist_reverse (current->members);
+
+                current = g_new (GamiQueueStatusEntry, 1);
+                current->params = g_hash_table_ref (pkt);
+                current->members = NULL;
+            } else {
+                current->members = g_slist_prepend (current->members,
+                                                    g_hash_table_ref (pkt));
+            }
+            list = g_slist_prepend (list, current);
+            g_simple_async_result_set_op_res_gpointer (simple, list, list_free);
+        } else {
+            g_simple_async_result_set_op_res_gpointer (simple,
+                                                       g_slist_reverse (list),
+                                                       list_free);
+            g_simple_async_result_complete_in_idle (simple);
+        }
+
+        return ! finished;
+    }
+}
+
+gboolean
+text_hook (gpointer data)
+{
+    GamiPacket *packet;
+    GSimpleAsyncResult *simple;
+
+    packet = ((GamiHookData *) data)->packet;
+
+    if (packet->handled)
+        return TRUE;
+
+    if (packet->parsed) {
+        gchar *action_id;
+
+        action_id = g_hash_table_lookup (packet->parsed, "ActionID");
+        if (action_id
+            && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
+            return TRUE;
+    }
+
+    packet->handled = TRUE;
+
+    simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
+
+    g_simple_async_result_set_op_res_gpointer (simple,
+                                               g_strdup (packet->raw),
+                                               g_free);
+    g_simple_async_result_complete_in_idle (simple);
+
+    return FALSE;
 }

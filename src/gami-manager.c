@@ -1917,7 +1917,8 @@ gami_manager_queue_summary_async (GamiManager *ami,
  * @result: #GAsyncResult
  * @error: a #GError, or %NULL
  *
- * Finishes an asynchronous action started with gami_manager_queue_summary_async()
+ * Finishes an asynchronous action started with
+ * gami_manager_queue_summary_async()
  *
  * Returns: #GSList of queue statistics (stored as #GHashTable) on success,
  *          %NULL on failure
@@ -2017,92 +2018,228 @@ gami_manager_queue_log_finish (GamiManager *ami,
                                error);
 }
 
-#if 0
-    GSList *
-gami_manager_queue_status (GamiManager *ami, const gchar *queue,
-                           const gchar *action_id, GError **error)
+/**
+ * gami_manager_queue_rule:
+ * @ami: #GamiManager
+ * @rule: Limit list to entries under this rule
+ * @action_id: ActionID to ease response matching
+ * @error: a #GError, or %NULL
+ *
+ * List rules defined in queuerules.conf.
+ *
+ * Returns: #GHashTable of rule information (stored as #GamiQueueRule) on
+ *          success, %NULL on failure
+ */
+GHashTable *
+gami_manager_queue_rule (GamiManager *ami,
+                         const gchar *rule,
+                         const gchar *action_id,
+                         GError **error)
 {
-    GamiManagerPrivate *priv;
-    GString *action;
-    gchar *action_str;
-
-    GSList *list = NULL;
-    gboolean list_complete = FALSE;
-
-    g_return_val_if_fail (ami != NULL && GAMI_IS_MANAGER (ami), FALSE);
-    g_return_val_if_fail (error == NULL || *error == NULL, FALSE);
-
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    action = g_string_new ("Action: QueueStatus\r\n");
-
-    if (queue)
-        g_string_append_printf (action, "Queue: %s\r\n", queue);
-    if (action_id)
-        g_string_append_printf (action, "ActionID: %s\r\n", action_id);
-
-    g_string_append (action, "\r\n");
-
-    action_str = g_string_free (action, FALSE);
-
-    if (send_command (priv->socket, action_str, error) != G_IO_STATUS_NORMAL) {
-        g_assert (error == NULL || *error != NULL);
-        return NULL;
-    }
-
-    g_assert (error == NULL || *error == NULL);
-
-    g_free (action_str);
-
-    if (! check_response (priv->socket, "Response", "Success", error))
-        return NULL;
-
-    g_assert (error == NULL || *error == NULL);
-
-    while (! list_complete) {
-        GIOStatus status;
-        GHashTable *packet = NULL;
-        gchar *event;
-
-        while ((status = receive_packet (priv->socket,
-                                         &packet,
-                                         error)) == G_IO_STATUS_AGAIN);
-
-        if (status != G_IO_STATUS_NORMAL) {
-            g_assert (error == NULL || *error != NULL);
-
-            if (list) {
-                g_slist_foreach (list, (GFunc)g_hash_table_destroy, NULL);
-                g_slist_free (list);
-            }
-
-            return NULL;
-        }
-
-        g_assert (error == NULL || *error == NULL);
-
-        event = g_hash_table_lookup (packet, "Event");
-        if (! strcmp (event, "QueueParam")) {
-            g_hash_table_remove (packet, "Event");
-            list = g_slist_prepend (list, packet);
-            packet = NULL;
-        } else if (! strcmp (event, "QueueStatusComplete")) {
-            list_complete = TRUE;
-            g_hash_table_destroy (packet);
-        } else {
-            /* this is just a test, we should get rid of this longterm */
-            //printf ("Ups, unexpected event in get_response_list(): %s\n",
-            //        event);
-            g_hash_table_destroy (packet);
-            packet = NULL;
-        }
-    }
-
-    list = g_slist_reverse (list);
-
-    return list;
+    gami_manager_queue_rule_async (ami,
+                                  rule,
+                                  action_id,
+                                  set_sync_result,
+                                  NULL);
+    return wait_hash_result (ami, gami_manager_queue_rule_finish, error);
 }
-#endif
+
+/**
+ * gami_manager_queue_rule_async:
+ * @ami: #GamiManager
+ * @rule: Limit list to entries under this rule
+ * @action_id: ActionID to ease response matching
+ * @callback: Callback for asynchronious operation.
+ * @user_data: User data to pass to the callback.
+ *
+ * List rules defined in queuerules.conf.
+ */
+void
+gami_manager_queue_rule_async (GamiManager *ami,
+                               const gchar *rule,
+                               const gchar *action_id,
+                               GAsyncReadyCallback callback,
+                               gpointer user_data)
+{
+    send_async_action (ami,
+                       (GamiAsyncFunc) gami_manager_queue_rule_async,
+                       queue_rule_hook,
+                       NULL,
+                       callback,
+                       user_data,
+                       "QueueRule",
+                       "Rule", rule,
+                       "ActionID", action_id,
+                       NULL);
+}
+
+/**
+ * gami_manager_queue_rule_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_queue_rule_async ()
+ *
+ * Returns: #GHashTable of rule information (stored as #GamiQueueRule) on
+ *          success, %NULL on failure
+ */
+GHashTable *
+gami_manager_queue_rule_finish (GamiManager *ami,
+                                GAsyncResult *result,
+                                GError **error)
+{
+    return hash_action_finish (ami,
+                               result,
+                               (GamiAsyncFunc) gami_manager_queue_rule_async,
+                               error);
+}
+
+
+/**
+ * gami_manager_queue_status:
+ * @ami: #GamiManager
+ * @queue: queue to limit list to
+ * @action_id: ActionID to ease response matching
+ * @error: a #GError, or %NULL
+ *
+ * List status information of queues and their members.
+ *
+ * Returns: #GSList of queues status information (stored as
+ *          #GamiQueueStatusEntry) on success, %NULL on failure
+ */
+GSList *
+gami_manager_queue_status (GamiManager *ami,
+                           const gchar *queue,
+                           const gchar *action_id,
+                           GError **error)
+{
+    gami_manager_queue_status_async (ami,
+                                     queue,
+                                     action_id,
+                                     set_sync_result,
+                                     NULL);
+    return wait_list_result (ami, gami_manager_queue_status_finish, error);
+}
+
+/**
+ * gami_manager_queue_status_async:
+ * @ami: #GamiManager
+ * @queue: queue to limit list to
+ * @action_id: ActionID to ease response matching
+ * @callback: Callback for asynchronious operation.
+ * @user_data: User data to pass to the callback.
+ *
+ * List status information of queues and their members.
+ */
+void
+gami_manager_queue_status_async (GamiManager *ami,
+                                 const gchar *queue,
+                                 const gchar *action_id,
+                                 GAsyncReadyCallback callback,
+                                 gpointer user_data)
+{
+    send_async_action (ami,
+                       (GamiAsyncFunc) gami_manager_queue_status_async,
+                       queue_status_hook,
+                       "QueueStatusComplete",
+                       callback,
+                       user_data,
+                       "QueueStatus",
+                       "Queue", queue,
+                       "ActionID", action_id,
+                       NULL);
+}
+
+/**
+ * gami_manager_queue_status_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with
+ * gami_manager_queue_status_async ()
+ *
+ * Returns: #GSList of queues status information (stored as
+ *          #GamiQueueStatusEntry) on success, %NULL on failure
+ */
+GSList *
+gami_manager_queue_status_finish (GamiManager *ami,
+                                  GAsyncResult *result,
+                                  GError **error)
+{
+    return list_action_finish (ami,
+                               result,
+                               (GamiAsyncFunc) gami_manager_queue_status_async,
+                               error);
+}
+
+
+/**
+ * gami_manager_queues:
+ * @ami: #GamiManager
+ * @action_id: ActionID to ease response matching
+ * @error: a #GError, or %NULL
+ *
+ * Receive a dump of queue statistics like the "show queues" CLI command
+ *
+ * Returns: queue statistics in text format on success or %NULL on failure
+ */
+gchar *
+gami_manager_queues (GamiManager *ami,
+                     const gchar *action_id,
+                     GError **error)
+{
+    gami_manager_queues_async (ami, action_id, set_sync_result, NULL);
+    return wait_string_result (ami, gami_manager_queues_finish, error);
+}
+
+/**
+ * gami_manager_queues_async:
+ * @ami: #GamiManager
+ * @action_id: ActionID to ease response matching
+ * @callback: Callback for asynchronious operation.
+ * @user_data: User data to pass to the callback.
+ *
+ * Receive a dump of queue statistics like the "show queues" CLI command
+ */
+void
+gami_manager_queues_async (GamiManager *ami,
+                           const gchar *action_id,
+                           GAsyncReadyCallback callback,
+                           gpointer user_data)
+{
+    send_async_action (ami,
+                       (GamiAsyncFunc) gami_manager_queues_async,
+                       text_hook,
+                       NULL,
+                       callback,
+                       user_data,
+                       "Queues",
+                       "ActionID", action_id,
+                       NULL);
+}
+
+/**
+ * gami_manager_queues_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_queues_async ()
+ *
+ * Returns: queue statistics in text format on success or %NULL on failure
+ */
+gchar *
+gami_manager_queues_finish (GamiManager *ami,
+                            GAsyncResult *result,
+                            GError **error)
+{
+    return string_action_finish (ami,
+                                 result,
+                                 (GamiAsyncFunc) gami_manager_queues_async,
+                                 error);
+}
 
 
 /*
@@ -2177,7 +2314,8 @@ gami_manager_zap_dial_offhook_async (GamiManager *ami,
  * @result: #GAsyncResult
  * @error: a #GError, or %NULL
  *
- * Finishes an asynchronous action started with gami_manager_zap_dial_offhook_async()
+ * Finishes an asynchronous action started with
+ * gami_manager_zap_dial_offhook_async()
  *
  * Returns: %TRUE if the action succeeded, otherwise %FALSE
  */
