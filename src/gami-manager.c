@@ -2119,7 +2119,9 @@ gami_manager_queue_status (GamiManager *ami,
                                      action_id,
                                      set_sync_result,
                                      NULL);
-    return wait_list_result (ami, gami_manager_queue_status_finish, error);
+    return wait_queue_status_result (ami,
+                                     gami_manager_queue_status_finish,
+                                     error);
 }
 
 /**

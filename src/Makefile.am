@@ -20,14 +20,15 @@ libgami_1_0_la_SOURCES =          \
         gami-main.h               \
         gami-manager.c            \
         gami-manager.h            \
-	gami-manager-types.h      \
+        gami-manager-types.h      \
+        gami-manager-types.c      \
         gami-manager-private.c    \
         gami-manager-private.h    \
         gami-enums.h              \
         gami-enumtypes.c          \
         gami-enumtypes.h          \
-	gami-error.c              \
-	gami-error.h              \
+        gami-error.c              \
+        gami-error.h              \
         $(NULL)
 
 libgami_1_0_la_LDFLAGS = $(GAMI_LIBS)

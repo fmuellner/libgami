@@ -110,6 +110,10 @@ GSList *wait_list_result (GamiManager *ami,
                           GamiListFinishFunc func,
                           GError **error);
 
+GSList *wait_queue_status_result (GamiManager *ami,
+                                  GamiListFinishFunc func,
+                                  GError **error);
+
 /* finish functions */
 gboolean bool_action_finish (GamiManager *ami,
                              GAsyncResult *result,

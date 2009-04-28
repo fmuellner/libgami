@@ -9,29 +9,6 @@ typedef gpointer (*GamiPointerFinishFunc) (GamiManager *,
 
 static gchar *set_action_id (const gchar *action_id);
 
-static gpointer wait_pointer_result (GamiManager *ami,
-                                     GamiPointerFinishFunc finish,
-                                     GError **error);
-
-static gpointer
-wait_pointer_result (GamiManager *ami,
-                     GamiPointerFinishFunc finish,
-                     GError **error)
-{
-    GamiManagerPrivate *priv;
-    gpointer res;
-
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    while (!priv->sync_result)
-        g_main_context_iteration (NULL, TRUE);
-
-    res = finish (ami, priv->sync_result, error);
-    g_object_unref (priv->sync_result);
-    priv->sync_result = NULL;
-
-    return res;
-}
 
 gboolean
 wait_bool_result (GamiManager *ami,
@@ -96,13 +73,48 @@ wait_hash_result (GamiManager *ami,
     return res;
 }
 
-GSList *wait_list_result (GamiManager *ami,
+GSList *
+wait_list_result (GamiManager *ami,
+                  GamiListFinishFunc finish,
+                  GError **error)
+{
+    GamiManagerPrivate *priv;
+    GSList *res;
+
+    priv = GAMI_MANAGER_PRIVATE (ami);
+
+    while (!priv->sync_result)
+        g_main_context_iteration (NULL, TRUE);
+
+    res = g_slist_copy (finish (ami, priv->sync_result, error));
+    g_slist_foreach (res, (GFunc) g_hash_table_ref, NULL);
+
+    g_object_unref (priv->sync_result);
+    priv->sync_result = NULL;
+
+    return res;
+}
+
+GSList *
+wait_queue_status_result (GamiManager *ami,
                           GamiListFinishFunc finish,
                           GError **error)
 {
-    return (GSList *) wait_pointer_result (ami,
-                                           (GamiPointerFinishFunc) finish,
-                                           error);
+    GamiManagerPrivate *priv;
+    GSList *res;
+
+    priv = GAMI_MANAGER_PRIVATE (ami);
+
+    while (!priv->sync_result)
+        g_main_context_iteration (NULL, TRUE);
+
+    res = g_slist_copy (finish (ami, priv->sync_result, error));
+    g_slist_foreach (res, (GFunc) gami_queue_status_entry_ref, NULL);
+
+    g_object_unref (priv->sync_result);
+    priv->sync_result = NULL;
+
+    return res;
 }
 
 static gchar *
@@ -862,19 +874,8 @@ list_hook (gpointer data)
 void
 gami_queue_status_list_free (GSList *list)
 {
-    GSList *iter;
-
-    for (iter = list; iter; iter = iter->next) {
-        GamiQueueStatusEntry *entry;
-
-        entry = (GamiQueueStatusEntry *) iter->data;
-        g_hash_table_unref (entry->params);
-        g_slist_foreach    (entry->members, (GFunc) g_hash_table_unref, NULL);
-        g_slist_free       (entry->members);
-        g_free (entry);
-    }
+    g_slist_foreach (list, (GFunc) gami_queue_status_entry_unref, NULL);
     g_slist_free (list);
-    list = NULL;
 }
 
 void
@@ -1020,24 +1021,14 @@ queue_status_hook (gpointer data)
         finished = ! g_strcmp0 (event, ((GamiHookData *) data)->handler_data);
 
         if (! finished) {
-            GamiQueueStatusEntry *current = NULL;
-
-            if (list) {
-                current = (GamiQueueStatusEntry *) list->data;
-            }
-
             if (! g_strcmp0 (event, "QueueParams")) {
-                if (current && current->members)
-                    current->members = g_slist_reverse (current->members);
-
-                current = g_new (GamiQueueStatusEntry, 1);
-                current->params = g_hash_table_ref (pkt);
-                current->members = NULL;
-
-                list = g_slist_prepend (list, current);
+                list = g_slist_prepend (list,
+                                        gami_queue_status_entry_new (pkt));
             } else {
-                current->members = g_slist_prepend (current->members,
-                                                    g_hash_table_ref (pkt));
+                GamiQueueStatusEntry *entry;
+
+                entry = (GamiQueueStatusEntry *) list->data;
+                gami_queue_status_entry_add_member (entry, pkt);
             }
             g_hash_table_remove (pkt, "Event");
             g_simple_async_result_set_op_res_gpointer (simple, list, list_free);

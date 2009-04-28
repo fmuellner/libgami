@@ -25,10 +25,16 @@
 #ifndef __GAMI_MANAGER_TYPES_H__
 #define __GAMI_MANAGER_TYPES_H__
 
+#include <glib-object.h>
+
 G_BEGIN_DECLS
 
 typedef struct _GamiQueueRule        GamiQueueRule;
 typedef struct _GamiQueueStatusEntry GamiQueueStatusEntry;
+
+gint gami_queue_rule_seconds (GamiQueueRule *rule);
+const gchar *gami_queue_rule_get_max_penalty_change (GamiQueueRule *rule);
+const gchar *gami_queue_rule_get_min_penalty_change (GamiQueueRule *rule);
 
 struct _GamiQueueRule {
 	gint   seconds;
@@ -36,10 +42,20 @@ struct _GamiQueueRule {
 	gchar *min_penalty_change;
 };
 
-struct _GamiQueueStatusEntry {
-	GHashTable *params;
-	GSList     *members;
-};
+#define G_TYPE_QUEUE_STATUS_ENTRY (gami_queue_status_entry_get_type ())
+
+GType gami_queue_status_entry_get_type (void) G_GNUC_CONST;
+
+GamiQueueStatusEntry *gami_queue_status_entry_new (GHashTable *params);
+
+GamiQueueStatusEntry *gami_queue_status_entry_ref (GamiQueueStatusEntry *entry);
+void  gami_queue_status_entry_unref (GamiQueueStatusEntry *entry);
+
+void gami_queue_status_entry_add_member (GamiQueueStatusEntry *entry,
+										 GHashTable *member);
+
+GHashTable *gami_queue_status_entry_get_params  (GamiQueueStatusEntry *entry);
+GSList     *gami_queue_status_entry_get_members (GamiQueueStatusEntry *entry);
 
 G_END_DECLS
 
