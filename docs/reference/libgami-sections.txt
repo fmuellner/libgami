@@ -33,6 +33,9 @@ gami_manager_challenge_finish
 gami_manager_absolute_timeout
 gami_manager_absolute_timeout_async
 gami_manager_absolute_timeout_finish
+gami_manager_command
+gami_manager_command_async
+gami_manager_command_finish
 gami_manager_agi
 gami_manager_agi_async
 gami_manager_agi_finish
@@ -106,6 +109,15 @@ gami_manager_queue_remove_finish
 gami_manager_queue_summary
 gami_manager_queue_summary_async
 gami_manager_queue_summary_finish
+gami_manager_queue_rule
+gami_manager_queue_rule_async
+gami_manager_queue_rule_finish
+gami_manager_queue_status
+gami_manager_queue_status_async
+gami_manager_queue_status_finish
+gami_manager_queues
+gami_manager_queues_async
+gami_manager_queues_finish
 <SUBSECTION Agents>
 gami_manager_agent_callback_login
 gami_manager_agent_callback_login_async
@@ -278,6 +290,22 @@ GAMI_TYPE_EVENT_MASK
 gami_event_mask_get_type
 GAMI_TYPE_MODULE_LOAD_TYPE
 gami_module_load_type_get_type
+</SECTION>
+
+<SECTION>
+<TITLE>manager-response-types</TITLE>
+<FILE>libgami-manager-response-types</FILE>
+GamiQueueRule
+GamiQueueStatusEntry
+gami_queue_status_entry_add_member
+gami_queue_status_entry_get_members
+gami_queue_status_entry_get_params
+gami_queue_status_entry_new
+gami_queue_status_entry_ref
+gami_queue_status_entry_unref
+<SUBSECTION Standard>
+GAMI_TYPE_QUEUE_STATUS_ENTRY
+gami_queue_status_entry_get_type
 </SECTION>
 
 <SECTION>

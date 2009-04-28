@@ -41,6 +41,7 @@
     <title>API reference</title>
     <xi:include href="xml/libgami-main.xml"/>
     <xi:include href="xml/libgami-manager.xml"/>
+    <xi:include href="xml/libgami-manager-response-types.xml"/>
     <xi:include href="xml/libgami-error.xml"/>
   </chapter>
 </book>

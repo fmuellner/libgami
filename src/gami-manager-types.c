@@ -19,6 +19,52 @@
 
 #include <gami-manager-types.h>
 
+/**
+ * SECTION: libgami-manager-response-types
+ * @short_description: data types to represent action result which do not map 
+ *                     directly to GLib data types
+ * @title: GamiManagerResponseTypes
+ * @stability: Unstable
+ *
+ * Some #GamiManager actions do not map to native GLib data types and require
+ * its own boxed type.
+ */
+
+static gpointer
+queue_rule_copy (gpointer boxed)
+{
+    GamiQueueRule *rule = boxed;
+    GamiQueueRule *copy;
+
+    copy = g_new (GamiQueueRule, 1);
+    copy->seconds = rule->seconds;
+    copy->max_penalty_change = g_strdup (rule->max_penalty_change);
+    copy->min_penalty_change = g_strdup (rule->min_penalty_change);
+
+    return copy;
+}
+
+static void
+queue_rule_free (gpointer boxed)
+{
+    GamiQueueRule *rule = boxed;
+
+    g_free (rule->max_penalty_change);
+    g_free (rule->min_penalty_change);
+    g_free (rule);
+}
+
+GType
+gami_queue_rule_get_type ()
+{
+    static GType type_id = 0;
+    if (! type_id)
+        type_id = g_boxed_type_register_static (g_intern_static_string ("GamiQueueRule"),
+                                                queue_rule_copy,
+                                                queue_rule_free);
+    return type_id;
+}
+
 struct _GamiQueueStatusEntry {
 	GHashTable    *params;
 	GSList        *members;
@@ -51,6 +97,15 @@ gami_queue_status_entry_get_type (void)
     return type_id;
 }
 
+/**
+ * gami_queue_status_entry_new:
+ * @params: a #GHashTable with queue parameters
+ *
+ * Creates an instance of %GAMI_TYPE_QUEUE_STATUS_ENTRY with queue parameters
+ * @params and no members.
+ *
+ * Returns: a new #GamiQueueStatusEntry
+ */
 GamiQueueStatusEntry *
 gami_queue_status_entry_new (GHashTable *params) {
     GamiQueueStatusEntry *entry;
@@ -63,6 +118,14 @@ gami_queue_status_entry_new (GHashTable *params) {
     return entry;
 }
 
+/**
+ * gami_queue_status_entry_ref:
+ * @entry: a #GamiQueueStatusEntry
+ *
+ * Increase the reference count of @entry.
+ *
+ * Returns: a reference to @entry
+ */
 GamiQueueStatusEntry *
 gami_queue_status_entry_ref (GamiQueueStatusEntry *entry)
 {
@@ -73,6 +136,13 @@ gami_queue_status_entry_ref (GamiQueueStatusEntry *entry)
     return entry;
 }
 
+/**
+ * gami_queue_status_entry_unref:
+ * @entry: a #GamiQueueStatusEntry
+ *
+ * Decrease the reference count of @entry. If the reference count drops to 0,
+ * all memory allocated for @entry is freed
+ */
 void
 gami_queue_status_entry_unref (GamiQueueStatusEntry *entry)
 {
@@ -87,6 +157,13 @@ gami_queue_status_entry_unref (GamiQueueStatusEntry *entry)
     }
 }
 
+/**
+ * gami_queue_status_entry_add_member:
+ * @entry: a #GamiQueueStatusEntry
+ * @member: a #GHashTable representing a single queue member
+ *
+ * Add @member to the list held by @entry.
+ */
 void
 gami_queue_status_entry_add_member (GamiQueueStatusEntry *entry,
                                     GHashTable *member)
@@ -98,6 +175,16 @@ gami_queue_status_entry_add_member (GamiQueueStatusEntry *entry,
                                       g_hash_table_ref (member));
 }
 
+/**
+ * gami_queue_status_entry_get_members:
+ * @entry: a #GamiQueueStatusEntry
+ *
+ * Retrieve the list of members stored in @entry. Each member is represented 
+ * by a #GHashTable. The returned list remains property of @entry and should
+ * not be freed or modified.
+ *
+ * Returns: a #GSList of queue members
+ */
 GSList *
 gami_queue_status_entry_get_members (GamiQueueStatusEntry *entry)
 {
@@ -107,6 +194,14 @@ gami_queue_status_entry_get_members (GamiQueueStatusEntry *entry)
     return g_slist_reverse (entry->members);
 }
 
+/**
+ * gami_queue_status_entry_get_params:
+ * @entry: a #GamiQueueStatusEntry
+ *
+ * Retrieve the queue parameters as #GHashTable
+ *
+ * Returns: a #GHashTable of queue parameters
+ */
 GHashTable *
 gami_queue_status_entry_get_params  (GamiQueueStatusEntry *entry)
 {
