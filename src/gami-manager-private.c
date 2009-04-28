@@ -860,6 +860,24 @@ list_hook (gpointer data)
 }
 
 void
+gami_queue_status_list_free (GSList *list)
+{
+    GSList *iter;
+
+    for (iter = list; iter; iter = iter->next) {
+        GamiQueueStatusEntry *entry;
+
+        entry = (GamiQueueStatusEntry *) iter->data;
+        g_hash_table_unref (entry->params);
+        g_slist_foreach    (entry->members, (GFunc) g_hash_table_unref, NULL);
+        g_slist_free       (entry->members);
+        g_free (entry);
+    }
+    g_slist_free (list);
+    list = NULL;
+}
+
+void
 gami_queue_rule_free (GamiQueueRule *rule)
 {
     g_free (rule->max_penalty_change);
@@ -995,7 +1013,7 @@ queue_status_hook (gpointer data)
         GSList *list;
         gchar *event;
         gboolean finished;
-        GDestroyNotify list_free = (GDestroyNotify) free_list_result;
+        GDestroyNotify list_free = (GDestroyNotify) gami_queue_status_list_free;
 
         event = g_hash_table_lookup (pkt, "Event");
         list = (GSList *) g_simple_async_result_get_op_res_gpointer (simple);
@@ -1003,27 +1021,25 @@ queue_status_hook (gpointer data)
 
         if (! finished) {
             GamiQueueStatusEntry *current = NULL;
-            GSList *members = NULL;
-            
-            g_hash_table_remove (pkt, "Event");
 
             if (list) {
                 current = (GamiQueueStatusEntry *) list->data;
-                members = current->members;
             }
 
             if (! g_strcmp0 (event, "QueueParams")) {
-                if (members)
+                if (current && current->members)
                     current->members = g_slist_reverse (current->members);
 
                 current = g_new (GamiQueueStatusEntry, 1);
                 current->params = g_hash_table_ref (pkt);
                 current->members = NULL;
+
+                list = g_slist_prepend (list, current);
             } else {
                 current->members = g_slist_prepend (current->members,
                                                     g_hash_table_ref (pkt));
             }
-            list = g_slist_prepend (list, current);
+            g_hash_table_remove (pkt, "Event");
             g_simple_async_result_set_op_res_gpointer (simple, list, list_free);
         } else {
             g_simple_async_result_set_op_res_gpointer (simple,
