@@ -719,6 +719,16 @@
  */
 
 /**
+ * gami_manager_command:
+ * @action_id: (allow-none):
+ */
+
+/**
+ * gami_manager_command_async:
+ * @action_id: (allow-none):
+ */
+
+/**
  * gami_manager_agi:
  * @command_id: (allow-none):
  * @action_id: (allow-none):

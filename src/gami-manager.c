@@ -5713,6 +5713,84 @@ gami_manager_bridge_finish (GamiManager *ami,
 
 
 /**
+ * gami_manager_command:
+ * @ami: #GamiManager
+ * @command: the CLI command to execute
+ * @action_id: ActionID to ease response matching
+ * @error: a #GError, or %NULL
+ *
+ * Execute a CLI command and get its output
+ *
+ * Returns: the CLI output of @command
+ */
+gchar *
+gami_manager_command (GamiManager *ami,
+                      const gchar *command,
+                      const gchar *action_id,
+                      GError **error)
+{
+    gami_manager_command_async (ami,
+                                command,
+                                action_id,
+                                set_sync_result,
+                                NULL);
+    return wait_string_result (ami, gami_manager_command_finish, error);
+}
+
+/**
+ * gami_manager_command_async:
+ * @ami: #GamiManager
+ * @command: the CLI command to execute
+ * @action_id: ActionID to ease response matching
+ * @callback: Callback for asynchronious operation.
+ * @user_data: User data to pass to the callback.
+ *
+ * Execute a CLI command and get its output
+ */
+void
+gami_manager_command_async (GamiManager *ami,
+                            const gchar *command,
+                            const gchar *action_id,
+                            GAsyncReadyCallback callback,
+                            gpointer user_data)
+{
+    g_assert (command != NULL);
+
+    send_async_action (ami,
+                       (GamiAsyncFunc) gami_manager_command_async,
+                       text_hook,
+                       "Follows",
+                       callback,
+                       user_data,
+                       "Command",
+                       "Command", command,
+                       "ActionID", action_id,
+                       NULL);
+}
+
+/**
+ * gami_manager_command_finish:
+ * @ami: #GamiManager
+ * @result: #GAsyncResult
+ * @error: a #GError, or %NULL
+ *
+ * Finishes an asynchronous action started with gami_manager_command_async()
+ *
+ * Returns: the CLI output of the executed command
+ */
+gchar *
+gami_manager_command_finish (GamiManager *ami,
+                             GAsyncResult *result,
+                             GError **error)
+{
+    return string_action_finish (ami,
+                                 result,
+                                 (GamiAsyncFunc) gami_manager_command_async,
+                                 error);
+}
+
+
+/**
  * gami_manager_agi:
  * @ami: #GamiManager
  * @channel: The name of the channel to execute @command in

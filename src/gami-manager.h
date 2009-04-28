@@ -1071,6 +1071,19 @@ gboolean gami_manager_bridge_finish (GamiManager *ami,
                                      GAsyncResult *result,
                                      GError **error);
 
+gchar *gami_manager_command (GamiManager *ami,
+                             const gchar *command,
+                             const gchar *action_id,
+                             GError **error);
+void gami_manager_command_async (GamiManager *ami,
+                                 const gchar *command,
+                                 const gchar *action_id,
+                                 GAsyncReadyCallback callback,
+                                 gpointer user_data);
+gchar *gami_manager_command_finish (GamiManager *ami,
+                                    GAsyncResult *result,
+                                    GError **error);
+
 gboolean gami_manager_agi (GamiManager *ami,
                            const gchar *channel,
 						   const gchar *command,

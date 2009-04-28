@@ -68,17 +68,6 @@ Which parts of the Asterisk Manager API are currently missing
                 </para>
             </formalpara>
         </listitem>
-        <listitem>
-            <formalpara>
-                <title>Command</title>
-                <para>
-                    The Command action is used to execute any CLI command. It
-                    is certainly the most usefull action of those listed here,
-                    but unfortunately its text output may be difficult to fit
-                    with the existing API.
-                </para>
-            </formalpara>
-        </listitem>
     </itemizedlist>
 </refsect1>
 </refentry>
