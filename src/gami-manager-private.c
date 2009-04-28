@@ -386,7 +386,10 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *ami)
     if (cond & (G_IO_IN | G_IO_PRI)) {
         static gsize  buffer_size = 0;
         static gchar *response    = NULL;
+        gsize         channel_buffer_size;
         GError       *error       = NULL;
+
+        channel_buffer_size = g_io_channel_get_buffer_size (chan);
 
         do {
             gsize mem_avail,
@@ -394,26 +397,24 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *ami)
                   offset;
 
             if (! response) {
-                buffer_size = g_io_channel_get_buffer_size (chan);
+                buffer_size = channel_buffer_size;
                 response = g_malloc0 (buffer_size);
             }
 
             offset = strlen (response);
             mem_avail = buffer_size - offset;
-            if (mem_avail < g_io_channel_get_buffer_size (chan)) {
+            if (mem_avail < channel_buffer_size) {
                 gsize mem_new;
 
-                mem_new = g_io_channel_get_buffer_size (chan) - mem_avail;
+                mem_new = channel_buffer_size - mem_avail;
                 buffer_size += mem_new;
-                if (response)
-                    response = g_realloc (response, buffer_size);
-                else
-                    response = g_malloc0 (buffer_size);
+
+                response = g_realloc (response, buffer_size);
             }
 
             status = g_io_channel_read_chars (chan,
                                               response + offset,
-                                              buffer_size,
+                                              channel_buffer_size,
                                               &bytes_read,
                                               &error);
             response [offset + bytes_read] = '\0';
@@ -433,12 +434,13 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *ami)
 
             shift = g_strrstr (response, "\r\n\r\n");
             if (shift) {
-                if (strlen (shift + 4))
+                if (strlen (shift + 4)) {
                     g_memmove (response, shift + 4, strlen (shift + 4));
-                else {
+                    response [strlen (shift + 4)] = '\0';
+                } else {
                     g_free (response);
+                    g_nullify_pointer ((gpointer *) &response);
                     buffer_size = 0;
-                    response = NULL;
                 }
             }
         }
@@ -609,16 +611,18 @@ parse_packet (gpointer data)
         gchar **tokens;
 
         tokens = g_strsplit (*line, ": ", 2);
-        if (g_strv_length (tokens) == 2) {
-            gchar *key, *value;
+        if (tokens) {
+            if (g_strv_length (tokens) == 2) {
+                gchar *key, *value;
 
-            key = g_strdup (tokens [0]);
-            value = g_strdup (tokens [1]);
+                key = g_strdup (tokens [0]);
+                value = g_strdup (tokens [1]);
 
-            g_debug ("   %s: %s", key, value);
-            g_hash_table_insert (pkt->parsed, key, value);
+                g_debug ("   %s: %s", key, value);
+                g_hash_table_insert (pkt->parsed, key, value);
+            }
+            g_strfreev (tokens);
         }
-        g_strfreev (tokens);
     }
     g_strfreev (lines);
     g_debug ("Packet string parsed");
@@ -1059,6 +1063,44 @@ text_hook (gpointer data)
     g_simple_async_result_set_op_res_gpointer (simple,
                                                g_strdup (packet->raw),
                                                g_free);
+    g_simple_async_result_complete_in_idle (simple);
+
+    return FALSE;
+}
+
+gboolean
+queues_hook (gpointer data)
+{
+    GamiPacket *packet;
+    GSimpleAsyncResult *simple;
+
+    packet = ((GamiHookData *) data)->packet;
+
+    if (packet->handled)
+        return TRUE;
+
+    packet->handled = TRUE;
+
+    simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
+
+    if (g_strcmp0 (packet->raw, "")) {
+        gchar *result;
+
+        result = (gchar *) g_simple_async_result_get_op_res_gpointer (simple);
+        if (result)
+            g_simple_async_result_set_op_res_gpointer (simple,
+                                                       g_strjoin ("\r\n\r\n",
+                                                                  result,
+                                                                  packet->raw,
+                                                                  NULL),
+                                                       g_free);
+        else
+            g_simple_async_result_set_op_res_gpointer (simple,
+                                                       g_strdup (packet->raw),
+                                                       g_free);
+        return TRUE;
+    }
+
     g_simple_async_result_complete_in_idle (simple);
 
     return FALSE;

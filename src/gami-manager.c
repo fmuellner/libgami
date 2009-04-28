@@ -2211,7 +2211,7 @@ gami_manager_queues_async (GamiManager *ami,
 {
     send_async_action (ami,
                        (GamiAsyncFunc) gami_manager_queues_async,
-                       text_hook,
+                       queues_hook,
                        NULL,
                        callback,
                        user_data,

@@ -169,6 +169,7 @@ gboolean string_hook       (gpointer data);
 gboolean hash_hook         (gpointer data);
 gboolean list_hook         (gpointer data);
 gboolean text_hook         (gpointer data);
+gboolean queues_hook       (gpointer data);
 gboolean queue_rule_hook   (gpointer data);
 gboolean queue_status_hook (gpointer data);
 
