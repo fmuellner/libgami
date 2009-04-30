@@ -1,7 +1,7 @@
 /* vi: se sw=4 ts=4 tw=80 fo+=t cin cino=(0t0 : */
 /*
  * LIBGAMI - Library for using the Asterisk Manager Interface with GObject
- * Copyright (C) 2008-2009 Florian Müllner, EuropeSIP Communications S.L.
+ * Copyright (C) 2008-2009 Florian Müllner
  * 
  * This library is free software: you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public License

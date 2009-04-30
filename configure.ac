@@ -130,29 +130,6 @@ AM_CONDITIONAL([ENABLE_INTROSPECTION],[test "$enable_introspection" = "yes"])
 GTK_DOC_CHECK([1.9])
 
 
-##################################################
-# Check for svn2cl
-##################################################
-
-AC_PATH_PROG(SVN2CL,svn2cl,no)
-enable_svn2cl=no;
-
-if test "$SVN2CL" != "no";
-then
-	AC_MSG_CHECKING([if $SVN2CL works as expected])
-	AS_IF([$SVN2CL --stdout >/dev/null 2>&1],[enable_svn2cl=yes],
-	      [enable_svn2cl=no])
-	AC_MSG_RESULT([$enable_svn2cl])
-fi
-
-SVN2CL_OPTIONS="--group-by-day --authors=AUTHORS -i --break-before-msg"
-AC_SUBST(SVN2CL_OPTIONS)
-AM_CONDITIONAL([ENABLE_SVN2CL],[test "$enable_svn2cl" = "yes"])
-
-
-##################################################
-
-
 AC_OUTPUT([
 Makefile
 libgami-1.0.pc
@@ -167,7 +144,6 @@ echo "
 Configure summary:
       Gtk-Doc Support........:  $enable_gtk_doc
       GObj. Introspection....:  $enable_introspection
-      Auto-update ChangeLog..:  $enable_svn2cl
 
 Now type 'make' to build.
 "

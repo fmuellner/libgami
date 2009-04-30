@@ -1,0 +1,9 @@
+.*
+!.gitignore
+*.gir
+*.l[ao]
+*.o
+*.typelib
+Makefile
+Makefile.in
+gami-enumtypes.[ch]
