@@ -5758,7 +5758,7 @@ gami_manager_command_async (GamiManager *ami,
 
     send_async_action (ami,
                        (GamiAsyncFunc) gami_manager_command_async,
-                       text_hook,
+                       command_hook,
                        "Follows",
                        callback,
                        user_data,

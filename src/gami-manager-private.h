@@ -176,6 +176,7 @@ gboolean text_hook         (gpointer data);
 gboolean queues_hook       (gpointer data);
 gboolean queue_rule_hook   (gpointer data);
 gboolean queue_status_hook (gpointer data);
+gboolean command_hook      (gpointer data);
 
 gboolean reconnect_socket (GamiManager *ami);
 

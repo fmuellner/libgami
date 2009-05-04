@@ -1044,6 +1044,51 @@ queue_status_hook (gpointer data)
 }
 
 gboolean
+command_hook (gpointer data)
+{
+    GamiPacket *packet;
+    GSimpleAsyncResult *simple;
+    gchar *result, *footer;
+    gint   result_len;
+
+    packet = ((GamiHookData *) data)->packet;
+
+    if (packet->handled)
+        return TRUE;
+
+    if (packet->parsed) {
+        gchar *action_id;
+
+        action_id = g_hash_table_lookup (packet->parsed, "ActionID");
+        if (action_id
+            && g_strcmp0 (action_id, ((GamiHookData *) data)->action_id))
+            return TRUE;
+    }
+
+    packet->handled = TRUE;
+
+    result = packet->raw;
+    while (g_str_has_prefix (result, "Response: ")
+           || g_str_has_prefix (result, "Message: ")
+           || g_str_has_prefix (result, "Privilege: ")
+           || g_str_has_prefix (result, "ActionID: ")) {
+        result = g_strstr_len (result, -1, "\r\n") + strlen ("\r\n");
+    }
+
+    footer = g_strrstr (result, "--END COMMAND--");
+    result_len = footer ? footer - result : strlen (result);
+
+    simple = (GSimpleAsyncResult *) ((GamiHookData *) data)->result;
+
+    g_simple_async_result_set_op_res_gpointer (simple,
+                                               g_strndup (result, result_len),
+                                               g_free);
+    g_simple_async_result_complete_in_idle (simple);
+
+    return FALSE;
+}
+
+gboolean
 text_hook (gpointer data)
 {
     GamiPacket *packet;
