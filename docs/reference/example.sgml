@@ -18,6 +18,11 @@
 		manager events are not shown here, but it should give you a general 
 		idea about Libgami usage and provide you with a starting point.
 	</para>
+	<para>
+		Compile with <programlisting>
+$ cc `pkg-config --cflags --libs libgami-1.0` -o example example.c
+</programlisting>
+	</para>
 	<programlisting role="C"><![CDATA[
 #include <stdio.h>
 #include <gami.h>

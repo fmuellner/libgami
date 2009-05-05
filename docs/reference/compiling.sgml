@@ -24,7 +24,7 @@
 $ pkg-config --cflags libgami-1.0
  -I/usr/include/libgami-1.0 -I/usr/include/glib-2.0 -I/usr/lib/glib-2.0/include
 $ pkg-config --libs libgami-1.0
- -L/usr/lib -lgami-1.0 -lgobject-2.0 -lglib-2.0
+ -L/usr/lib -lgami-1.0 -lgio-2.0 -lgobject-2.0 -lglib-2.0
 </programlisting>
     </para>
 </refsect1>
