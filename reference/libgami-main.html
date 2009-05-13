@@ -1,0 +1,184 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>General</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.73.2">
+<link rel="start" href="index.html" title="Libgami Reference Manual">
+<link rel="up" href="libgami-reference.html" title="API reference">
+<link rel="prev" href="libgami-reference.html" title="API reference">
+<link rel="next" href="libgami-manager.html" title="GamiManager">
+<meta name="generator" content="GTK-Doc V1.11 (XML mode)">
+<link rel="stylesheet" href="style.css" type="text/css">
+<link rel="chapter" href="libgami.html" title="Libgami Overview">
+<link rel="chapter" href="libgami-reference.html" title="API reference">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="2">
+<tr valign="middle">
+<td><a accesskey="p" href="libgami-reference.html"><img src="left.png" width="24" height="24" border="0" alt="Prev"></a></td>
+<td><a accesskey="u" href="libgami-reference.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></a></td>
+<td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
+<th width="100%" align="center">Libgami Reference Manual</th>
+<td><a accesskey="n" href="libgami-manager.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
+</tr>
+<tr><td colspan="5" class="shortcuts">
+<a href="#libgami-main.synopsis" class="shortcut">Top</a>
+                 | 
+                <a href="#libgami-main.description" class="shortcut">Description</a>
+</td></tr>
+</table>
+<div class="refentry" lang="en">
+<a name="libgami-main"></a><div class="titlepage"></div>
+<div class="refnamediv"><table width="100%"><tr>
+<td valign="top">
+<h2><span class="refentrytitle"><a name="libgami-main.top_of_page"></a>General</span></h2>
+<p>General — Library initialization</p>
+</td>
+<td valign="top" align="right"></td>
+</tr></table></div>
+<div class="refsect1" lang="en">
+<a name="libgami-main.stability-level"></a><h2>Stability Level</h2>
+Unstable, unless otherwise indicated
+</div>
+<div class="refsynopsisdiv">
+<a name="libgami-main.synopsis"></a><h2>Synopsis</h2>
+<pre class="synopsis">
+
+#include &lt;gami.h&gt;
+
+void                <a class="link" href="libgami-main.html#gami-init" title="gami_init ()">gami_init</a>                           (int *argc,
+                                                         char ***argv);
+<a
+href="http://library.gnome.org/devel/glib/stable/glib-Commandline-option-parser.html#GOptionGroup"
+>GOptionGroup</a> *      <a class="link" href="libgami-main.html#gami-get-option-group" title="gami_get_option_group ()">gami_get_option_group</a>               (void);
+<a
+href="http://library.gnome.org/devel/glib/stable/glib-Basic-Types.html#gboolean"
+>gboolean</a>            <a class="link" href="libgami-main.html#gami-parse-args" title="gami_parse_args ()">gami_parse_args</a>                     (int *argc,
+                                                         char ***argv);
+</pre>
+</div>
+<div class="refsect1" lang="en">
+<a name="libgami-main.description"></a><h2>Description</h2>
+<p>
+This section describes the Libgami initialization functions</p>
+<p>
+</p>
+</div>
+<div class="refsect1" lang="en">
+<a name="libgami-main.details"></a><h2>Details</h2>
+<div class="refsect2" lang="en">
+<a name="gami-init"></a><h3>gami_init ()</h3>
+<pre class="programlisting">void                gami_init                           (int *argc,
+                                                         char ***argv);</pre>
+<p>
+Call this function before using any other Gami functions in your application.
+It will initialize the underlying type system and parses some standard 
+command line options. <em class="parameter"><code>argc</code></em> and <em class="parameter"><code>argv</code></em> are adjusted accordingly so your own
+code will never see those arguments.
+</p>
+<p>
+Debug messages in the library will be disabled by default, to get them
+back, install a log handler using <a
+href="http://library.gnome.org/devel/glib/stable/glib-Message-Logging.html#g-log-set-handler"
+><code class="function">g_log_set_handler()</code></a> for the domain "Gami".
+</p>
+<p>
+On Windows, the network stack is initialized as well.</p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>argc</code></em> :</span></p></td>
+<td> Address of the <em class="parameter"><code>argc</code></em> parameter of <code class="function">main()</code>.
+       Changed if any arguments were handled.
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>argv</code></em> :</span></p></td>
+<td> Address of the <em class="parameter"><code>argv</code></em> parameter of <code class="function">main()</code>.
+       Any parameters understood by <a class="link" href="libgami-main.html#gami-init" title="gami_init ()"><code class="function">gami_init()</code></a> are stripped before return.
+</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<hr>
+<div class="refsect2" lang="en">
+<a name="gami-get-option-group"></a><h3>gami_get_option_group ()</h3>
+<pre class="programlisting"><a
+href="http://library.gnome.org/devel/glib/stable/glib-Commandline-option-parser.html#GOptionGroup"
+>GOptionGroup</a> *      gami_get_option_group               (void);</pre>
+<p>
+Returns a <a
+href="http://library.gnome.org/devel/glib/stable/glib-Commandline-option-parser.html#GOptionGroup"
+><span class="type">GOptionGroup</span></a> for the commandline arguments recognized by
+Gami. You should add this group to your <a
+href="http://library.gnome.org/devel/glib/stable/glib-Commandline-option-parser.html#GOptionContext"
+><span class="type">GOptionContext</span></a> with
+<a
+href="http://library.gnome.org/devel/glib/stable/glib-Commandline-option-parser.html#g-option-context-add-group"
+><code class="function">g_option_context_add_group()</code></a>, if you are using <a
+href="http://library.gnome.org/devel/glib/stable/glib-Commandline-option-parser.html#g-option-context-parse"
+><code class="function">g_option_context_parse()</code></a> to
+parse your commandline arguments</p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody><tr>
+<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
+<td> a <a
+href="http://library.gnome.org/devel/glib/stable/glib-Commandline-option-parser.html#GOptionGroup"
+><span class="type">GOptionGroup</span></a> for the commandline arguments recognized by Gami
+</td>
+</tr></tbody>
+</table></div>
+</div>
+<hr>
+<div class="refsect2" lang="en">
+<a name="gami-parse-args"></a><h3>gami_parse_args ()</h3>
+<pre class="programlisting"><a
+href="http://library.gnome.org/devel/glib/stable/glib-Basic-Types.html#gboolean"
+>gboolean</a>            gami_parse_args                     (int *argc,
+                                                         char ***argv);</pre>
+<p>
+Parses command line arguments, and initializes global attributes of Gami.
+Any arguments used by Gami are removed from the array and <em class="parameter"><code>argc</code></em> and <em class="parameter"><code>argv</code></em>
+are updated accordingly.</p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>argc</code></em> :</span></p></td>
+<td> a pointer to the number of command line arguments.
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>argv</code></em> :</span></p></td>
+<td> a pointer to the array of command line arguments.
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
+<td> <a
+href="http://library.gnome.org/devel/glib/stable/glib-Standard-Macros.html#TRUE--CAPS"
+><code class="literal">TRUE</code></a> if initialization succeeded, otherwise <a
+href="http://library.gnome.org/devel/glib/stable/glib-Standard-Macros.html#FALSE--CAPS"
+><code class="literal">FALSE</code></a>.
+</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+</div>
+</div>
+<div class="footer">
+<hr>
+          Generated by GTK-Doc V1.11</div>
+</body>
+</html>

@@ -1,0 +1,306 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN">
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>GamiManagerResponseTypes</title>
+<meta name="generator" content="DocBook XSL Stylesheets V1.73.2">
+<link rel="start" href="index.html" title="Libgami Reference Manual">
+<link rel="up" href="libgami-reference.html" title="API reference">
+<link rel="prev" href="libgami-manager.html" title="GamiManager">
+<link rel="next" href="libgami-error.html" title="GamiError">
+<meta name="generator" content="GTK-Doc V1.11 (XML mode)">
+<link rel="stylesheet" href="style.css" type="text/css">
+<link rel="chapter" href="libgami.html" title="Libgami Overview">
+<link rel="chapter" href="libgami-reference.html" title="API reference">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table class="navigation" id="top" width="100%" summary="Navigation header" cellpadding="2" cellspacing="2">
+<tr valign="middle">
+<td><a accesskey="p" href="libgami-manager.html"><img src="left.png" width="24" height="24" border="0" alt="Prev"></a></td>
+<td><a accesskey="u" href="libgami-reference.html"><img src="up.png" width="24" height="24" border="0" alt="Up"></a></td>
+<td><a accesskey="h" href="index.html"><img src="home.png" width="24" height="24" border="0" alt="Home"></a></td>
+<th width="100%" align="center">Libgami Reference Manual</th>
+<td><a accesskey="n" href="libgami-error.html"><img src="right.png" width="24" height="24" border="0" alt="Next"></a></td>
+</tr>
+<tr><td colspan="5" class="shortcuts">
+<a href="#libgami-manager-response-types.synopsis" class="shortcut">Top</a>
+                 | 
+                <a href="#libgami-manager-response-types.description" class="shortcut">Description</a>
+</td></tr>
+</table>
+<div class="refentry" lang="en">
+<a name="libgami-manager-response-types"></a><div class="titlepage"></div>
+<div class="refnamediv"><table width="100%"><tr>
+<td valign="top">
+<h2><span class="refentrytitle"><a name="libgami-manager-response-types.top_of_page"></a>GamiManagerResponseTypes</span></h2>
+<p>GamiManagerResponseTypes — data types to represent action result which do not map 
+                    directly to GLib data types</p>
+</td>
+<td valign="top" align="right"></td>
+</tr></table></div>
+<div class="refsect1" lang="en">
+<a name="libgami-manager-response-types.stability-level"></a><h2>Stability Level</h2>
+Unstable, unless otherwise indicated
+</div>
+<div class="refsynopsisdiv">
+<a name="libgami-manager-response-types.synopsis"></a><h2>Synopsis</h2>
+<pre class="synopsis">
+
+#include &lt;gami.h&gt;
+
+                    <a class="link" href="libgami-manager-response-types.html#GamiQueueRule" title="GamiQueueRule">GamiQueueRule</a>;
+                    <a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a>;
+void                <a class="link" href="libgami-manager-response-types.html#gami-queue-status-entry-add-member" title="gami_queue_status_entry_add_member ()">gami_queue_status_entry_add_member</a>  (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry,
+                                                         <a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+>GHashTable</a> *member);
+<a
+href="http://library.gnome.org/devel/glib/stable/glib-Singly-Linked-Lists.html#GSList"
+>GSList</a> *            <a class="link" href="libgami-manager-response-types.html#gami-queue-status-entry-get-members" title="gami_queue_status_entry_get_members ()">gami_queue_status_entry_get_members</a> (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry);
+<a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+>GHashTable</a> *        <a class="link" href="libgami-manager-response-types.html#gami-queue-status-entry-get-params" title="gami_queue_status_entry_get_params ()">gami_queue_status_entry_get_params</a>  (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry);
+<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> * <a class="link" href="libgami-manager-response-types.html#gami-queue-status-entry-new" title="gami_queue_status_entry_new ()">gami_queue_status_entry_new</a>      (<a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+>GHashTable</a> *params);
+<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> * <a class="link" href="libgami-manager-response-types.html#gami-queue-status-entry-ref" title="gami_queue_status_entry_ref ()">gami_queue_status_entry_ref</a>      (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry);
+void                <a class="link" href="libgami-manager-response-types.html#gami-queue-status-entry-unref" title="gami_queue_status_entry_unref ()">gami_queue_status_entry_unref</a>       (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry);
+</pre>
+</div>
+<div class="refsect1" lang="en">
+<a name="libgami-manager-response-types.description"></a><h2>Description</h2>
+<p>
+Some <a class="link" href="libgami-manager.html#GamiManager"><span class="type">GamiManager</span></a> actions do not map to native GLib data types and require
+its own boxed type.</p>
+<p>
+</p>
+</div>
+<div class="refsect1" lang="en">
+<a name="libgami-manager-response-types.details"></a><h2>Details</h2>
+<div class="refsect2" lang="en">
+<a name="GamiQueueRule"></a><h3>GamiQueueRule</h3>
+<pre class="programlisting">typedef struct {
+	gint   seconds;
+	gchar *max_penalty_change;
+	gchar *min_penalty_change;
+} GamiQueueRule;
+</pre>
+<p>
+<a class="link" href="libgami-manager-response-types.html#GamiQueueRule" title="GamiQueueRule"><span class="type">GamiQueueRule</span></a> represents a queue rule as defined in queuerules.conf. The
+<a class="link" href="libgami-manager.html#gami-manager-queue-rule" title="gami_manager_queue_rule ()"><code class="function">gami_manager_queue_rule()</code></a> action returns a <a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+><span class="type">GHashTable</span></a> which holds a <a
+href="http://library.gnome.org/devel/glib/stable/glib-Singly-Linked-Lists.html#GSList"
+><span class="type">GSList</span></a> 
+of <a class="link" href="libgami-manager-response-types.html#GamiQueueRule" title="GamiQueueRule"><span class="type">GamiQueueRule</span></a> as value.</p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody>
+<tr>
+<td><p><span class="term"><a
+href="http://library.gnome.org/devel/glib/stable/glib-Basic-Types.html#gint"
+>gint</a> <em class="structfield"><code>seconds</code></em>;</span></p></td>
+<td> number of seconds when the rule should be applied
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><a
+href="http://library.gnome.org/devel/glib/stable/glib-Basic-Types.html#gchar"
+>gchar</a> *<em class="structfield"><code>max_penalty_change</code></em>;</span></p></td>
+<td> relative or absolute change of the MAX_PENALTY property
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><a
+href="http://library.gnome.org/devel/glib/stable/glib-Basic-Types.html#gchar"
+>gchar</a> *<em class="structfield"><code>min_penalty_change</code></em>;</span></p></td>
+<td> relative or absolute change of the MIN_PENALTY property
+</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<hr>
+<div class="refsect2" lang="en">
+<a name="GamiQueueStatusEntry"></a><h3>GamiQueueStatusEntry</h3>
+<pre class="programlisting">typedef struct _GamiQueueStatusEntry GamiQueueStatusEntry;</pre>
+<p>
+<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry"><span class="type">GamiQueueStatusEntry</span></a> represents a queue status entry as returned by the
+<a class="link" href="libgami-manager.html#gami-manager-queue-status" title="gami_manager_queue_status ()"><code class="function">gami_manager_queue_status()</code></a> action.
+It is an ref-counted opaque structure holding both queue properties and a
+list of queue members, which should only be accessed by the corresponding
+functions.</p>
+<p>
+</p>
+</div>
+<hr>
+<div class="refsect2" lang="en">
+<a name="gami-queue-status-entry-add-member"></a><h3>gami_queue_status_entry_add_member ()</h3>
+<pre class="programlisting">void                gami_queue_status_entry_add_member  (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry,
+                                                         <a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+>GHashTable</a> *member);</pre>
+<p>
+Add <em class="parameter"><code>member</code></em> to the list held by <em class="parameter"><code>entry</code></em>.</p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>entry</code></em> :</span></p></td>
+<td> a <a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry"><span class="type">GamiQueueStatusEntry</span></a>
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>member</code></em> :</span></p></td>
+<td> a <a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+><span class="type">GHashTable</span></a> representing a single queue member
+</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<hr>
+<div class="refsect2" lang="en">
+<a name="gami-queue-status-entry-get-members"></a><h3>gami_queue_status_entry_get_members ()</h3>
+<pre class="programlisting"><a
+href="http://library.gnome.org/devel/glib/stable/glib-Singly-Linked-Lists.html#GSList"
+>GSList</a> *            gami_queue_status_entry_get_members (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry);</pre>
+<p>
+Retrieve the list of members stored in <em class="parameter"><code>entry</code></em>. Each member is represented 
+by a <a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+><span class="type">GHashTable</span></a>. The returned list remains property of <em class="parameter"><code>entry</code></em> and should
+not be freed or modified.</p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>entry</code></em> :</span></p></td>
+<td> a <a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry"><span class="type">GamiQueueStatusEntry</span></a>
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
+<td> a <a
+href="http://library.gnome.org/devel/glib/stable/glib-Singly-Linked-Lists.html#GSList"
+><span class="type">GSList</span></a> of queue members
+</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<hr>
+<div class="refsect2" lang="en">
+<a name="gami-queue-status-entry-get-params"></a><h3>gami_queue_status_entry_get_params ()</h3>
+<pre class="programlisting"><a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+>GHashTable</a> *        gami_queue_status_entry_get_params  (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry);</pre>
+<p>
+Retrieve the queue parameters as <a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+><span class="type">GHashTable</span></a></p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>entry</code></em> :</span></p></td>
+<td> a <a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry"><span class="type">GamiQueueStatusEntry</span></a>
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
+<td> a <a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+><span class="type">GHashTable</span></a> of queue parameters
+</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<hr>
+<div class="refsect2" lang="en">
+<a name="gami-queue-status-entry-new"></a><h3>gami_queue_status_entry_new ()</h3>
+<pre class="programlisting"><a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> * gami_queue_status_entry_new      (<a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+>GHashTable</a> *params);</pre>
+<p>
+Creates an instance of <code class="literal">GAMI_TYPE_QUEUE_STATUS_ENTRY</code> with queue parameters
+<em class="parameter"><code>params</code></em> and no members.</p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>params</code></em> :</span></p></td>
+<td> a <a
+href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable"
+><span class="type">GHashTable</span></a> with queue parameters
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
+<td> a new <a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry"><span class="type">GamiQueueStatusEntry</span></a>
+</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<hr>
+<div class="refsect2" lang="en">
+<a name="gami-queue-status-entry-ref"></a><h3>gami_queue_status_entry_ref ()</h3>
+<pre class="programlisting"><a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> * gami_queue_status_entry_ref      (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry);</pre>
+<p>
+Increase the reference count of <em class="parameter"><code>entry</code></em>.</p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody>
+<tr>
+<td><p><span class="term"><em class="parameter"><code>entry</code></em> :</span></p></td>
+<td> a <a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry"><span class="type">GamiQueueStatusEntry</span></a>
+</td>
+</tr>
+<tr>
+<td><p><span class="term"><span class="emphasis"><em>Returns</em></span> :</span></p></td>
+<td> a reference to <em class="parameter"><code>entry</code></em>
+</td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<hr>
+<div class="refsect2" lang="en">
+<a name="gami-queue-status-entry-unref"></a><h3>gami_queue_status_entry_unref ()</h3>
+<pre class="programlisting">void                gami_queue_status_entry_unref       (<a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry">GamiQueueStatusEntry</a> *entry);</pre>
+<p>
+Decrease the reference count of <em class="parameter"><code>entry</code></em>. If the reference count drops to 0,
+all memory allocated for <em class="parameter"><code>entry</code></em> is freed</p>
+<p>
+</p>
+<div class="variablelist"><table border="0">
+<col align="left" valign="top">
+<tbody><tr>
+<td><p><span class="term"><em class="parameter"><code>entry</code></em> :</span></p></td>
+<td> a <a class="link" href="libgami-manager-response-types.html#GamiQueueStatusEntry" title="GamiQueueStatusEntry"><span class="type">GamiQueueStatusEntry</span></a>
+</td>
+</tr></tbody>
+</table></div>
+</div>
+</div>
+</div>
+<div class="footer">
+<hr>
+          Generated by GTK-Doc V1.11</div>
+</body>
+</html>
