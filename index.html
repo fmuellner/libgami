@@ -11,7 +11,7 @@
 		body {
   		margin-top: 1.0em;
   		background-color: #e5e5ee;
-		  font-family: "helvetica"; 
+		  font-family: "helvetica";
   		color: #000000;
     }
     #container {
@@ -25,7 +25,7 @@
     h3 { text-align: center; color: #1a1a11; }
     a { color: #1a1a11; }
     .description { font-size: 1.2em; margin-bottom: 30px; margin-top: 30px; font-style: italic;}
-    .download { float: right; }
+    .download { }
 		pre { background: #000; color: #fff; padding: 15px;}
     hr { border: 0; width: 80%; border-bottom: 1px solid #aaa}
     .footer { text-align:center; padding-top:30px; font-style: italic; }
@@ -35,53 +35,122 @@
 
 <body>
   <a href="http://github.com/fmuellner/libgami"><img style="position: absolute; top: 0; right: 0; border: 0;" src="http://s3.amazonaws.com/github/ribbons/forkme_right_darkblue_121621.png" alt="Fork me on GitHub" /></a>
-  
-  <div id="container">
 
-    <div class="download">
-      <a href="http://github.com/fmuellner/libgami/zipball/master">
-        <img border="0" width="90" src="http://github.com/images/modules/download/zip.png"></a>
-      <a href="http://github.com/fmuellner/libgami/tarball/master">
-        <img border="0" width="90" src="http://github.com/images/modules/download/tar.png"></a>
-    </div>
-      
-    <h1><a href="http://github.com/fmuellner/libgami">libgami</a> 
-      <span class="small">by <a href="http://github.com/fmuellner">fmuellner</a></span></h1>
+  <div id="container">
+    <h1><a href="http://github.com/fmuellner/libgami">libgami</a>
+      <span class="small">
+        by <a href="http://github.com/fmuellner">fmuellner</a>
+      </span>
+    </h1>
 
     <div class="description">
-      A GObject-based library for connections to the Asterisk Manager Interface
+      A GObject-based library for connections to the Asterisk Manager
+      Interface
     </div>
 
-    <h2>Dependencies</h2>
-    <ul>
-        <li><a href="http://library.gnome.org/devel/glib/unstable/">GLib</a></li>
-        <li><a href="http://library.gnome.org/devel/gobject/unstable/">GObject</a></li>
-        <li><a href="http://library.gnome.org/devel/gio/unstable/">GIO</a></li>
-    </ul>
-    <h2>License</h2>
-    <p><a href="http://www.gnu.org/licenses/lgpl-3.0-standalone.html">LGPL, Version 3</a></p>
-<h2>Authors</h2>
-<p>Florian M&uuml;llner (florian.muellner [AT] gmail.com)<br/></p>
-<h2>Contact</h2>
-<p>Florian M&uuml;llner (florian.muellner [AT] gmail.com)<br/></p>
+    <h2>General Features</h2>
 
-    <h2>Download</h2>
+    <ul>
+      <li>
+        written in C using the
+        <a href="http://en.wikipedia.org/wiki/GLib">GLib</a>/
+        <a href="http://en.wikipedia.org/wiki/GObject">GObject</a> libraries
+      </li>
+      <li>
+        up-to-date and
+        (<a href="reference/libgami-unimplemented.html">almost</a>) complete
+        support of the
+        <a href="http://www.voip-info.org/wiki-Asterisk+manager+API">Asterisk Manager API</a>
+      </li>
+      <li>
+        support for both synchronous and asynchronous (non-blocking)
+        operations
+      </li>
+      <li>mapping of action response packages to Glib data types
+        (<a href="http://library.gnome.org/devel/glib/stable/glib-Basic-Types.html#gboolean">gboolean</a>,
+        <a href="http://library.gnome.org/devel/glib/stable/glib-Basic-Types.html#gchar">gchar *</a>,
+        <a href="http://library.gnome.org/devel/glib/stable/glib-Hash-Tables.html#GHashTable">GHashTable</a>
+        and <a href="http://library.gnome.org/devel/glib/stable/glib-Singly-Linked-Lists.html#GSList">GSList</a>)
+      </li>
+      <li>
+        mapping of
+        <a href="http://www.voip-info.org/wiki/view/asterisk+manager+events">Asterisk Manager events</a>
+        to the <a href="http://library.gnome.org/devel/gobject/stable/chapter-signal.html">GObject messaging system</a>
+      </li>
+      <li>
+        basic abstraction of different manager API versions
+      </li>
+      <li>
+        support for
+        <a href="http://live.gnome.org/GObjectIntrospection">GObject introspection</a>
+      </li>
+      <li>
+        complete <a href="reference/index.html">API documentation</a>
+      </li>
+      <li>
+        full support on Linux and Windows
+      </li>
+    </ul>
+
+    <h2>Dependencies</h2>
+
+    <ul>
+      <li>
+        <a href="http://library.gnome.org/devel/glib/unstable/">GLib</a>
+        &gt;= 2.16
+      </li>
+      <li>
+        <a href="http://library.gnome.org/devel/gobject/unstable/">GObject</a>
+        &gt;= 2.16
+      </li>
+      <li>
+        <a href="http://library.gnome.org/devel/gio/unstable/">GIO</a>
+        &gt;= 2.16
+      </li>
+    </ul>
+
+    <h2>Installing</h2>
+
     <p>
-      You can download this project in either
-      <a href="http://github.com/fmuellner/libgami/zipball/master">zip</a> or
-      <a href="http://github.com/fmuellner/libgami/tarball/master">tar</a> formats.
+      <pre>
+$ ./configure
+$ make
+$ make install</pre>
     </p>
-    <p>You can also clone the project with <a href="http://git-scm.com">Git</a>
+
+    <p>
+      The latest bleeding edge source code can be downloaded from from github:
+      <div class="download">
+        <a href="http://github.com/fmuellner/libgami/zipball/master"><img border="0" width="90" src="http://github.com/images/modules/download/zip.png"></a>
+        <a href="http://github.com/fmuellner/libgami/tarball/master"><img border="0" width="90" src="http://github.com/images/modules/download/tar.png"></a>
+      </div>
+    </p>
+
+    <p>
+      You can also clone the project with <a href="http://git-scm.com">Git</a>
       by running:
       <pre>$ git clone git://github.com/fmuellner/libgami</pre>
     </p>
-      
+
+    <h2>License</h2>
+
+    <p>
+      This code is free to use under the terms of the
+      <a href="http://www.gnu.org/licenses/lgpl-3.0-standalone.html">GNU Lesser General Public License</a>
+    </p>
+
+    <h2>Contact</h2>
+
+    <p>
+      Florian M&uuml;llner (florian.muellner at gmail dot com)
+    </p>
+
     <div class="footer">
-      get the source code on GitHub : <a href="http://github.com/fmuellner/libgami">fmuellner/libgami</a>
+      get the source code on GitHub :
+      <a href="http://github.com/fmuellner/libgami">fmuellner/libgami</a>
     </div>
-    
+
   </div>
 
-  
 </body>
 </html>
