@@ -253,21 +253,26 @@ list_action_finish (GamiManager *ami,
 }
 
 void
-send_action_string (const gchar *action,
-                    GIOChannel *channel,
+send_action_string (GamiManager *ami,
+                    const gchar *action,
                     GError **error)
 {
+    GamiManagerPrivate *priv;
     GIOStatus status;
 
     g_assert (error == NULL || *error == NULL);
 
-    while (G_IO_STATUS_AGAIN == (status = g_io_channel_write_chars (channel,
+    priv = GAMI_MANAGER_PRIVATE (ami);
+
+    while (G_IO_STATUS_AGAIN == (status = g_io_channel_write_chars (priv->socket,
                                                                     action,
                                                                     -1,
                                                                     NULL,
                                                                     error)));
+    g_log (priv->log_domain, GAMI_LOG_LEVEL_NET_TX, "%s", action);
+
     if (status != G_IO_STATUS_ERROR)
-        while (G_IO_STATUS_AGAIN == g_io_channel_flush (channel,
+        while (G_IO_STATUS_AGAIN == g_io_channel_flush (priv->socket,
                                                         error));
 }
 
@@ -346,7 +351,7 @@ send_async_action_valist (GamiManager *ami,
                                          first_param_name,
                                          varargs);
 
-    send_action_string (action, priv->socket, &error);
+    send_action_string (ami, action, &error);
 
     g_debug ("GAMI command sent");
 
@@ -430,6 +435,8 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *ami)
                                               &bytes_read,
                                               &error);
             response [offset + bytes_read] = '\0';
+            g_log (priv->log_domain, GAMI_LOG_LEVEL_NET_RX,
+                   "%s", response + offset);
 
         } while (status == G_IO_STATUS_NORMAL);
 

@@ -16,9 +16,11 @@ GamiManagerClass
 GamiManagerNewAsyncFunc
 GamiEventMask
 GamiModuleLoadType
+GamiLogLevelFlags
 gami_manager_new
 gami_manager_new_async
 gami_manager_connect
+gami_manager_set_log_domain
 <SUBSECTION Authentification>
 gami_manager_login
 gami_manager_login_async
@@ -290,6 +292,8 @@ GAMI_TYPE_EVENT_MASK
 gami_event_mask_get_type
 GAMI_TYPE_MODULE_LOAD_TYPE
 gami_module_load_type_get_type
+GAMI_TYPE_LOG_LEVEL_FLAGS
+gami_log_level_flags_get_type
 </SECTION>
 
 <SECTION>

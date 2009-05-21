@@ -155,6 +155,8 @@ void         gami_manager_new_async (const gchar *host, const gchar *port,
 									 gpointer user_data);
 gboolean     gami_manager_connect (GamiManager *ami, GError **error);
 
+void gami_manager_set_log_domain (GamiManager *ami, const gchar *log_domain);
+
 gboolean gami_manager_login  (GamiManager *ami,
 							  const gchar *username,
                               const gchar *secret,

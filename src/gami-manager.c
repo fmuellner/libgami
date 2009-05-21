@@ -94,7 +94,8 @@ struct _GamiManagerNewAsyncData {
 
 enum {
     HOST_PROP = 1,
-    PORT_PROP
+    PORT_PROP,
+    LOG_DOMAIN_PROP
 };
 
 G_DEFINE_TYPE (GamiManager, gami_manager, G_TYPE_OBJECT);
@@ -261,6 +262,20 @@ gami_manager_connect (GamiManager *ami, GError **error)
                     (GIOFunc) dispatch_ami, ami);
 
     return priv->connected;
+}
+
+/**
+ * gami_manager_set_log_domain:
+ * @ami: #GamiManager
+ * @log_domain: the log domain used for dumped network traffic
+ *
+ * Set the log domain used for the log levels %GAMI_LOG_LEVEL_NET_RX and
+ * %GAMI_LOG_LEVEL_TX
+ */
+void
+gami_manager_set_log_domain (GamiManager *ami, const gchar *log_domain)
+{
+    g_object_set (G_OBJECT (ami), "log_domain", log_domain, NULL);
 }
 
 /*
@@ -6860,7 +6875,7 @@ gami_manager_user_event_async (GamiManager *ami,
 
     g_free (action);
 
-    send_action_string (action_complete, priv->socket, &error);
+    send_action_string (ami, action_complete, &error);
 
     g_debug ("GAMI command sent");
 
@@ -7160,6 +7175,9 @@ gami_manager_get_property (GObject *obj, guint prop_id,
         case PORT_PROP:
             g_value_set_string (value, priv->port);
             break;
+        case LOG_DOMAIN_PROP:
+            g_value_set_string (value, priv->log_domain);
+            break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (obj, prop_id, pspec);
             break;
@@ -7181,6 +7199,10 @@ gami_manager_set_property (GObject *obj, guint prop_id,
         case PORT_PROP:
             g_free (priv->port);
             priv->port = g_value_dup_string (value);
+            break;
+        case LOG_DOMAIN_PROP:
+            g_free (priv->log_domain);
+            priv->log_domain = g_value_dup_string (value);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (obj, prop_id, pspec);
@@ -7226,6 +7248,19 @@ gami_manager_class_init (GamiManagerClass *klass)
                                                           "5038",
                                                           G_PARAM_CONSTRUCT_ONLY
                                                           | G_PARAM_READWRITE));
+
+    /**
+     * GamiManager:log_domain:
+     *
+     * The log domain used for network dumps
+     **/
+    g_object_class_install_property (object_class,
+                                     LOG_DOMAIN_PROP,
+                                     g_param_spec_string ("log_domain",
+                                                          "LogDomain",
+                                                          "Custom log domain",
+                                                          G_LOG_DOMAIN,
+                                                          G_PARAM_READWRITE));
 
     /**
      * GamiManager::connected:

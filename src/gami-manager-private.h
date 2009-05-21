@@ -15,6 +15,8 @@ struct _GamiManagerPrivate
     gchar        *host;
     gchar        *port;
 
+    gchar        *log_domain;
+
     GHookList     packet_hooks;
     GQueue       *packet_buffer;
 
@@ -157,8 +159,8 @@ setup_action_hook (GamiManager *ami,
                    GError *error);
 
 void
-send_action_string (const gchar *action,
-                    GIOChannel *channel,
+send_action_string (GamiManager *ami,
+                    const gchar *action,
                     GError **error);
 
 /* response callbacks used internally in synchronous mode */

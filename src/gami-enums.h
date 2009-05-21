@@ -72,6 +72,18 @@ typedef enum {
 } GamiModuleLoadType;
 
 /**
+ * GamiLogLevelFlags:
+ * @GAMI_LOG_LEVEL_NET_RX: log level for received network traffic
+ * @GAMI_LOG_LEVEL_NET_TX: log level for transmitted network traffic
+ *
+ * Custom log levels where a #GamiManager dumps all network traffic.
+ */
+typedef enum {
+	GAMI_LOG_LEVEL_NET_RX = 1 << (G_LOG_LEVEL_USER_SHIFT + 0),
+	GAMI_LOG_LEVEL_NET_TX = 1 << (G_LOG_LEVEL_USER_SHIFT + 1)
+} GamiLogLevelFlags;
+
+/**
  * gami_module_load_type_get_type:
  *
  * Get the #GType of enum #GamiModuleLoadType
