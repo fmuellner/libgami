@@ -47,25 +47,25 @@
  */
 
 /**
- * gami_manager_get_var:
+ * gami_manager_getvar:
  * @channel: (allow-none):
  * @action_id: (allow-none):
  */
 
 /**
- * gami_manager_get_var_async:
+ * gami_manager_getvar_async:
  * @channel: (allow-none):
  * @action_id: (allow-none):
  */
 
 /**
- * gami_manager_set_var:
+ * gami_manager_setvar:
  * @channel: (allow-none):
  * @action_id: (allow-none):
  */
 
 /**
- * gami_manager_set_var_async:
+ * gami_manager_setvar_async:
  * @channel: (allow-none):
  * @action_id: (allow-none):
  */
@@ -573,12 +573,12 @@
  */
 
 /**
- * gami_manager_iax_peer_list:
+ * gami_manager_iax_peerlist:
  * @action_id: (allow-none):
  */
 
 /**
- * gami_manager_iax_peer_list_async:
+ * gami_manager_iax_peerlist_async:
  * @action_id: (allow-none):
  */
 
@@ -593,22 +593,22 @@
  */
 
 /**
- * gami_manager_sip_show_peer:
+ * gami_manager_sip_showpeer:
  * @action_id: (allow-none):
  */
 
 /**
- * gami_manager_sip_show_peer_async:
+ * gami_manager_sip_showpeer_async:
  * @action_id: (allow-none):
  */
 
 /**
- * gami_manager_sip_show_registry:
+ * gami_manager_sip_showregistry:
  * @action_id: (allow-none):
  */
 
 /**
- * gami_manager_sip_show_registry_async:
+ * gami_manager_sip_showregistry_async:
  * @action_id: (allow-none):
  */
 

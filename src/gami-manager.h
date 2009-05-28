@@ -152,8 +152,8 @@ typedef void (*GamiManagerNewAsyncFunc) (GamiManager *gami,
  */
 GType gami_manager_get_type (void) G_GNUC_CONST;
 
-GamiManager *gami_manager_new (const gchar *host, const gchar *port);
-void         gami_manager_new_async (const gchar *host, const gchar *port,
+GamiManager *gami_manager_new (const gchar *host, guint port);
+void         gami_manager_new_async (const gchar *host, guint port,
 									 GamiManagerNewAsyncFunc func,
 									 gpointer user_data);
 gboolean     gami_manager_connect (GamiManager *ami, GError **error);
@@ -190,35 +190,35 @@ gboolean gami_manager_logoff_finish (GamiManager *ami,
 									 GAsyncResult *result,
 									 GError **error);
 
-gchar *gami_manager_get_var (GamiManager *ami,
-                             const gchar *channel,
-                             const gchar *variable,
-                             const gchar *action_id,
-                             GError **error); 
-void gami_manager_get_var_async (GamiManager *ami,
-                                 const gchar *channel,
-								 const gchar *variable,
-                                 const gchar *action_id,
-								 GAsyncReadyCallback callback,
-								 gpointer user_data);
-gchar *gami_manager_get_var_finish (GamiManager *ami,
-                                    GAsyncResult *result,
-                                    GError **error);
+gchar *gami_manager_getvar (GamiManager *ami,
+                            const gchar *channel,
+                            const gchar *variable,
+                            const gchar *action_id,
+                            GError **error); 
+void gami_manager_getvar_async (GamiManager *ami,
+                                const gchar *channel,
+							    const gchar *variable,
+                                const gchar *action_id,
+							    GAsyncReadyCallback callback,
+							    gpointer user_data);
+gchar *gami_manager_getvar_finish (GamiManager *ami,
+                                   GAsyncResult *result,
+                                   GError **error);
 
-gboolean gami_manager_set_var (GamiManager *ami,
+gboolean gami_manager_setvar (GamiManager *ami,
                                const gchar *channel,
                                const gchar *variable,
                                const gchar *value,
                                const gchar *action_id,
                                GError **error);
-void gami_manager_set_var_async (GamiManager *ami,
-                                 const gchar *channel,
-								 const gchar *variable,
-                                 const gchar *value,
-								 const gchar *action_id,
-								 GAsyncReadyCallback callback,
-								 gpointer user_data);
-gboolean gami_manager_set_var_finish (GamiManager *ami,
+void gami_manager_setvar_async (GamiManager *ami,
+                                const gchar *channel,
+							    const gchar *variable,
+                                const gchar *value,
+							    const gchar *action_id,
+							    GAsyncReadyCallback callback,
+							    gpointer user_data);
+gboolean gami_manager_setvar_finish (GamiManager *ami,
                                       GAsyncResult *result,
                                       GError **error);
 
@@ -882,14 +882,14 @@ GHashTable *gami_manager_core_settings_finish (GamiManager *ami,
                                                GAsyncResult *result,
                                                GError **error);
 
-GSList *gami_manager_iax_peer_list (GamiManager *ami,
+GSList *gami_manager_iax_peerlist (GamiManager *ami,
                                     const gchar *action_id,
 									GError **error);
-void gami_manager_iax_peer_list_async (GamiManager *ami,
+void gami_manager_iax_peerlist_async (GamiManager *ami,
 									   const gchar *action_id,
                                        GAsyncReadyCallback callback,
                                        gpointer user_data);
-GSList *gami_manager_iax_peer_list_finish (GamiManager *ami,
+GSList *gami_manager_iax_peerlist_finish (GamiManager *ami,
                                            GAsyncResult *result,
                                            GError **error);
 
@@ -904,27 +904,27 @@ GSList *gami_manager_sip_peers_finish (GamiManager *ami,
                                        GAsyncResult *result,
                                        GError **error);
 
-GHashTable *gami_manager_sip_show_peer (GamiManager *ami,
+GHashTable *gami_manager_sip_showpeer (GamiManager *ami,
                                         const gchar *peer,
 										const gchar *action_id,
                                         GError **error);
-void gami_manager_sip_show_peer_async (GamiManager *ami,
+void gami_manager_sip_showpeer_async (GamiManager *ami,
                                        const gchar *peer,
 									   const gchar *action_id,
                                        GAsyncReadyCallback callback,
                                        gpointer user_data);
-GHashTable *gami_manager_sip_show_peer_finish (GamiManager *ami,
+GHashTable *gami_manager_sip_showpeer_finish (GamiManager *ami,
                                                GAsyncResult *result,
                                                GError **error);
 
-GSList *gami_manager_sip_show_registry (GamiManager *ami,
+GSList *gami_manager_sip_showregistry (GamiManager *ami,
 										const gchar *action_id,
                                         GError **error);
-void gami_manager_sip_show_registry_async (GamiManager *ami,
+void gami_manager_sip_showregistry_async (GamiManager *ami,
 										   const gchar *action_id,
                                            GAsyncReadyCallback callback,
                                            gpointer user_data);
-GSList *gami_manager_sip_show_registry_finish (GamiManager *ami,
+GSList *gami_manager_sip_showregistry_finish (GamiManager *ami,
                                                GAsyncResult *result,
                                                GError **error);
 

@@ -466,7 +466,7 @@ gami_manager_logoff_finish (GamiManager *ami,
  */
 
 /**
- * gami_manager_get_var:
+ * gami_manager_getvar:
  * @ami: #GamiManager
  * @channel: Channel to retrieve variable from
  * @variable: Name of the variable to retrieve
@@ -478,23 +478,23 @@ gami_manager_logoff_finish (GamiManager *ami,
  * Returns: value of @variable or %NULL
  */
 gchar *
-gami_manager_get_var (GamiManager *ami,
+gami_manager_getvar (GamiManager *ami,
                       const gchar *channel,
                       const gchar *variable,
                       const gchar *action_id,
                       GError **error)
 {
-    gami_manager_get_var_async (ami,
+    gami_manager_getvar_async (ami,
                                 channel,
                                 variable,
                                 action_id,
                                 set_sync_result,
                                 NULL);
-    return wait_string_result (ami, gami_manager_get_var_finish, error);
+    return wait_string_result (ami, gami_manager_getvar_finish, error);
 }
 
 /**
- * gami_manager_get_var_async:
+ * gami_manager_getvar_async:
  * @ami: #GamiManager
  * @channel: Channel to retrieve variable from
  * @variable: Name of the variable to retrieve
@@ -506,7 +506,7 @@ gami_manager_get_var (GamiManager *ami,
  *
  */
 void
-gami_manager_get_var_async (GamiManager *ami,
+gami_manager_getvar_async (GamiManager *ami,
                             const gchar *channel,
                             const gchar *variable,
                             const gchar *action_id,
@@ -516,7 +516,7 @@ gami_manager_get_var_async (GamiManager *ami,
     g_assert (variable != NULL);
 
     send_async_action (ami,
-                       (GamiAsyncFunc) gami_manager_get_var_async,
+                       (GamiAsyncFunc) gami_manager_getvar_async,
                        string_hook,
                        "Value",
                        callback,
@@ -529,28 +529,28 @@ gami_manager_get_var_async (GamiManager *ami,
 }
 
 /**
- * gami_manager_get_var_finish:
+ * gami_manager_getvar_finish:
  * @ami: #GamiManager
  * @result: #GAsyncResult
  * @error: a #GError, or %NULL
  *
- * Finishes an asynchronous action started with gami_manager_get_var_async()
+ * Finishes an asynchronous action started with gami_manager_getvar_async()
  *
  * Returns: the value of the requested variable, or %NULL
  */
 gchar *
-gami_manager_get_var_finish (GamiManager *ami,
+gami_manager_getvar_finish (GamiManager *ami,
                              GAsyncResult *result,
                              GError **error)
 {
     return string_action_finish (ami,
                                  result,
-                                 (GamiAsyncFunc) gami_manager_set_var_async,
+                                 (GamiAsyncFunc) gami_manager_setvar_async,
                                  error);
 }
 
 /**
- * gami_manager_set_var:
+ * gami_manager_setvar:
  * @ami: #GamiManager
  * @channel: Channel to set variable for
  * @variable: Name of the variable to set
@@ -563,14 +563,14 @@ gami_manager_get_var_finish (GamiManager *ami,
  * Returns: %TRUE on success, %FALSE on failure
  */
 gboolean
-gami_manager_set_var (GamiManager *ami,
+gami_manager_setvar (GamiManager *ami,
                       const gchar *channel,
                       const gchar *variable,
                       const gchar *value,
                       const gchar *action_id,
                       GError **error)
 {
-    gami_manager_set_var_async (ami,
+    gami_manager_setvar_async (ami,
                                 channel,
                                 variable,
                                 value,
@@ -578,11 +578,11 @@ gami_manager_set_var (GamiManager *ami,
                                 set_sync_result,
                                 NULL);
 
-    return wait_bool_result (ami, gami_manager_set_var_finish, error);
+    return wait_bool_result (ami, gami_manager_setvar_finish, error);
 }
 
 /**
- * gami_manager_set_var_async:
+ * gami_manager_setvar_async:
  * @ami: #GamiManager
  * @channel: Channel to set variable for
  * @variable: Name of the variable to set
@@ -595,7 +595,7 @@ gami_manager_set_var (GamiManager *ami,
  *
  */
 void
-gami_manager_set_var_async (GamiManager *ami,
+gami_manager_setvar_async (GamiManager *ami,
                             const gchar *channel,
                             const gchar *variable,
                             const gchar *value,
@@ -606,7 +606,7 @@ gami_manager_set_var_async (GamiManager *ami,
     g_assert (variable != NULL && value != NULL);
 
     send_async_action (ami,
-                       (GamiAsyncFunc) gami_manager_set_var_async,
+                       (GamiAsyncFunc) gami_manager_setvar_async,
                        bool_hook,
                        "Success",
                        callback,
@@ -617,23 +617,23 @@ gami_manager_set_var_async (GamiManager *ami,
 }
 
 /**
- * gami_manager_set_var_finish:
+ * gami_manager_setvar_finish:
  * @ami: #GamiManager
  * @result: #GAsyncResult
  * @error: a #GError, or %NULL
  *
- * Finishes an asynchronous action started with gami_manager_set_var_async()
+ * Finishes an asynchronous action started with gami_manager_setvar_async()
  *
  * Returns: %TRUE if the action succeeded, otherwise %FALSE
  */
 gboolean
-gami_manager_set_var_finish (GamiManager *ami,
+gami_manager_setvar_finish (GamiManager *ami,
                            GAsyncResult *result,
                            GError **error)
 {
     return bool_action_finish (ami,
                                result,
-                               (GamiAsyncFunc) gami_manager_set_var_async,
+                               (GamiAsyncFunc) gami_manager_setvar_async,
                                error);
 }
 
@@ -4586,7 +4586,7 @@ gami_manager_core_settings_finish (GamiManager *ami,
  */
 
 /**
- * gami_manager_iax_peer_list:
+ * gami_manager_iax_peerlist:
  * @ami: #GamiManager
  * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
@@ -4597,19 +4597,19 @@ gami_manager_core_settings_finish (GamiManager *ami,
  *          %NULL on failure
  */
 GSList *
-gami_manager_iax_peer_list (GamiManager *ami,
+gami_manager_iax_peerlist (GamiManager *ami,
                             const gchar *action_id,
                             GError **error)
 {
-    gami_manager_iax_peer_list_async (ami,
+    gami_manager_iax_peerlist_async (ami,
                                       action_id,
                                       set_sync_result,
                                       NULL);
-    return wait_list_result (ami, gami_manager_iax_peer_list_finish, error);
+    return wait_list_result (ami, gami_manager_iax_peerlist_finish, error);
 }
 
 /**
- * gami_manager_iax_peer_list_async:
+ * gami_manager_iax_peerlist_async:
  * @ami: #GamiManager
  * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
@@ -4618,13 +4618,13 @@ gami_manager_iax_peer_list (GamiManager *ami,
  * Retrieve a list of IAX2 peers
  */
 void
-gami_manager_iax_peer_list_async (GamiManager *ami,
+gami_manager_iax_peerlist_async (GamiManager *ami,
                                   const gchar *action_id,
                                   GAsyncReadyCallback callback,
                                   gpointer user_data)
 {
     send_async_action (ami,
-                       (GamiAsyncFunc) gami_manager_iax_peer_list_async,
+                       (GamiAsyncFunc) gami_manager_iax_peerlist_async,
                        list_hook,
                        "PeerlistComplete",
                        callback,
@@ -4635,23 +4635,23 @@ gami_manager_iax_peer_list_async (GamiManager *ami,
 }
 
 /**
- * gami_manager_iax_peer_list_finish:
+ * gami_manager_iax_peerlist_finish:
  * @ami: #GamiManager
  * @result: #GAsyncResult
  * @error: a #GError, or %NULL
  *
  * Finishes an asynchronous action started with
- * gami_manager_iax_peer_list_async()
+ * gami_manager_iax_peerlist_async()
  *
  * Returns: #GSList of IAX2 peers (stored as #GHashTable) on success,
  *          %NULL on failure
  */
 GSList *
-gami_manager_iax_peer_list_finish (GamiManager *ami,
+gami_manager_iax_peerlist_finish (GamiManager *ami,
                                    GAsyncResult *result,
                                    GError **error)
 {
-    GamiAsyncFunc func = (GamiAsyncFunc) gami_manager_iax_peer_list_async;
+    GamiAsyncFunc func = (GamiAsyncFunc) gami_manager_iax_peerlist_async;
     return list_action_finish (ami, result, func, error);
 }
 
@@ -4729,7 +4729,7 @@ gami_manager_sip_peers_finish (GamiManager *ami,
 
 
 /**
- * gami_manager_sip_show_peer:
+ * gami_manager_sip_showpeer:
  * @ami: #GamiManager
  * @peer: SIP peer to get status information for
  * @action_id: ActionID to ease response matching
@@ -4740,21 +4740,21 @@ gami_manager_sip_peers_finish (GamiManager *ami,
  * Returns: #GHashTable of peer status information on success, %NULL on failure
  */
 GHashTable *
-gami_manager_sip_show_peer (GamiManager *ami,
+gami_manager_sip_showpeer (GamiManager *ami,
                             const gchar *peer,
                             const gchar *action_id,
                             GError **error)
 {
-    gami_manager_sip_show_peer_async (ami,
+    gami_manager_sip_showpeer_async (ami,
                                       peer,
                                       action_id,
                                       set_sync_result,
                                       NULL);
-    return wait_hash_result (ami, gami_manager_sip_show_peer_finish, error);
+    return wait_hash_result (ami, gami_manager_sip_showpeer_finish, error);
 }
 
 /**
- * gami_manager_sip_show_peer_async:
+ * gami_manager_sip_showpeer_async:
  * @ami: #GamiManager
  * @peer: SIP peer to get status information for
  * @action_id: ActionID to ease response matching
@@ -4764,7 +4764,7 @@ gami_manager_sip_show_peer (GamiManager *ami,
  * Retrieve status information for @peer
  */
 void
-gami_manager_sip_show_peer_async (GamiManager *ami,
+gami_manager_sip_showpeer_async (GamiManager *ami,
                                   const gchar *peer,
                                   const gchar *action_id,
                                   GAsyncReadyCallback callback,
@@ -4773,7 +4773,7 @@ gami_manager_sip_show_peer_async (GamiManager *ami,
     g_assert (peer != NULL);
 
     send_async_action (ami,
-                       (GamiAsyncFunc) gami_manager_sip_show_peer_async,
+                       (GamiAsyncFunc) gami_manager_sip_showpeer_async,
                        hash_hook,
                        NULL,
                        callback,
@@ -4785,27 +4785,27 @@ gami_manager_sip_show_peer_async (GamiManager *ami,
 }
 
 /**
- * gami_manager_sip_show_peer_finish:
+ * gami_manager_sip_showpeer_finish:
  * @ami: #GamiManager
  * @result: #GAsyncResult
  * @error: a #GError, or %NULL
  *
- * Finishes an asynchronous action started with gami_manager_sip_show_peer_async()
+ * Finishes an asynchronous action started with gami_manager_sip_showpeer_async()
  *
  * Returns: #GHashTable of peer status information on success, %NULL on failure
  */
 GHashTable *
-gami_manager_sip_show_peer_finish (GamiManager *ami,
+gami_manager_sip_showpeer_finish (GamiManager *ami,
                                    GAsyncResult *result,
                                    GError **error)
 {
-    GamiAsyncFunc func = (GamiAsyncFunc) gami_manager_sip_show_peer_async;
+    GamiAsyncFunc func = (GamiAsyncFunc) gami_manager_sip_showpeer_async;
     return hash_action_finish (ami, result, func, error);
 }
 
 
 /**
- * gami_manager_sip_show_registry:
+ * gami_manager_sip_showregistry:
  * @ami: #GamiManager
  * @action_id: ActionID to ease response matching
  * @error: A location to return an error of type #GIOChannelError
@@ -4816,21 +4816,21 @@ gami_manager_sip_show_peer_finish (GamiManager *ami,
  *          %NULL on failure
  */
 GSList *
-gami_manager_sip_show_registry (GamiManager *ami,
+gami_manager_sip_showregistry (GamiManager *ami,
                                 const gchar *action_id,
                                 GError **error)
 {
-    gami_manager_sip_show_registry_async (ami,
+    gami_manager_sip_showregistry_async (ami,
                                           action_id,
                                           set_sync_result,
                                           NULL);
     return wait_list_result (ami,
-                             gami_manager_sip_show_registry_finish,
+                             gami_manager_sip_showregistry_finish,
                              error);
 }
 
 /**
- * gami_manager_sip_show_registry_async:
+ * gami_manager_sip_showregistry_async:
  * @ami: #GamiManager
  * @action_id: ActionID to ease response matching
  * @callback: Callback for asynchronious operation.
@@ -4839,13 +4839,13 @@ gami_manager_sip_show_registry (GamiManager *ami,
  * Retrieve registry information of SIP peers
  */
 void
-gami_manager_sip_show_registry_async (GamiManager *ami,
+gami_manager_sip_showregistry_async (GamiManager *ami,
                                       const gchar *action_id,
                                       GAsyncReadyCallback callback,
                                       gpointer user_data)
 {
     send_async_action (ami,
-                       (GamiAsyncFunc) gami_manager_sip_show_registry_async,
+                       (GamiAsyncFunc) gami_manager_sip_showregistry_async,
                        list_hook,
                        "RegistrationsComplete",
                        callback,
@@ -4856,23 +4856,23 @@ gami_manager_sip_show_registry_async (GamiManager *ami,
 }
 
 /**
- * gami_manager_sip_show_registry_finish:
+ * gami_manager_sip_showregistry_finish:
  * @ami: #GamiManager
  * @result: #GAsyncResult
  * @error: a #GError, or %NULL
  *
  * Finishes an asynchronous action started with
- * gami_manager_sip_show_registry_async()
+ * gami_manager_sip_showregistry_async()
  *
  * Returns: #GSList of registry information (stored as #GHashTable) on success,
  *          %NULL on failure
  */
 GSList *
-gami_manager_sip_show_registry_finish (GamiManager *ami,
+gami_manager_sip_showregistry_finish (GamiManager *ami,
                                        GAsyncResult *result,
                                        GError **error)
 {
-    GamiAsyncFunc func = (GamiAsyncFunc) gami_manager_sip_show_registry_async;
+    GamiAsyncFunc func = (GamiAsyncFunc) gami_manager_sip_showregistry_async;
     return list_action_finish (ami, result, func, error);
 }
 
