@@ -140,7 +140,12 @@ gami_init (int *argc, char ***argv)
     g_atexit ((GVoidFunc) WSACleanup);   /* This might be a bad idea in a DLL */
 #endif
 
-    g_log_set_handler ("Gami", G_LOG_LEVEL_DEBUG, null_log, NULL);
+	g_log_set_handler (G_LOG_DOMAIN,
+	                   ~( G_LOG_LEVEL_WARNING
+	                    | G_LOG_LEVEL_CRITICAL
+	                    | G_LOG_FLAG_FATAL),
+	                   null_log,
+	                   NULL);
     gami_parse_args (argc, argv);
 }
 
