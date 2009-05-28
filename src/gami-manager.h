@@ -108,6 +108,8 @@ G_BEGIN_DECLS
  */
 typedef struct _GamiManager GamiManager;
 
+typedef struct _GamiManagerPrivate GamiManagerPrivate;
+
 /**
  * GamiManagerClass:
  * @parent_class: #GamiManager's parent class (of type #GObjectClass)
@@ -119,6 +121,7 @@ typedef struct _GamiManagerClass GamiManagerClass;
 struct _GamiManager
 {
 	GObject parent_instance;
+	GamiManagerPrivate *priv;
 
 	const gchar *api_version;
 	guint  api_major;

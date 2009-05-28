@@ -15,17 +15,14 @@ wait_bool_result (GamiManager *ami,
                   GamiBoolFinishFunc finish,
                   GError **error)
 {
-    GamiManagerPrivate *priv;
     gboolean res;
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    while (!priv->sync_result)
+    while (! ami->priv->sync_result)
         g_main_context_iteration (NULL, TRUE);
 
-    res = finish (ami, priv->sync_result, error);
-    g_object_unref (priv->sync_result);
-    priv->sync_result = NULL;
+    res = finish (ami, ami->priv->sync_result, error);
+    g_object_unref (ami->priv->sync_result);
+    ami->priv->sync_result = NULL;
 
     return res;
 }
@@ -35,18 +32,15 @@ wait_string_result (GamiManager *ami,
                     GamiStringFinishFunc finish,
                     GError **error)
 {
-    GamiManagerPrivate *priv;
     gchar *res;
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    while (!priv->sync_result)
+    while (! ami->priv->sync_result)
         g_main_context_iteration (NULL, TRUE);
 
-    res = g_strdup (finish (ami, priv->sync_result, error));
+    res = g_strdup (finish (ami, ami->priv->sync_result, error));
 
-    g_object_unref (priv->sync_result);
-    priv->sync_result = NULL;
+    g_object_unref (ami->priv->sync_result);
+    ami->priv->sync_result = NULL;
 
     return res;
 }
@@ -56,19 +50,16 @@ wait_hash_result (GamiManager *ami,
                   GamiHashFinishFunc finish,
                   GError **error)
 {
-    GamiManagerPrivate *priv;
     GHashTable *res;
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    while (!priv->sync_result)
+    while (! ami->priv->sync_result)
         g_main_context_iteration (NULL, TRUE);
 
     res = g_hash_table_ref ((GHashTable *) finish (ami,
-                                                   priv->sync_result,
+                                                   ami->priv->sync_result,
                                                    error));
-    g_object_unref (priv->sync_result);
-    priv->sync_result = NULL;
+    g_object_unref (ami->priv->sync_result);
+    ami->priv->sync_result = NULL;
 
     return res;
 }
@@ -78,19 +69,16 @@ wait_list_result (GamiManager *ami,
                   GamiListFinishFunc finish,
                   GError **error)
 {
-    GamiManagerPrivate *priv;
     GSList *res;
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    while (!priv->sync_result)
+    while (! ami->priv->sync_result)
         g_main_context_iteration (NULL, TRUE);
 
-    res = g_slist_copy (finish (ami, priv->sync_result, error));
+    res = g_slist_copy (finish (ami, ami->priv->sync_result, error));
     g_slist_foreach (res, (GFunc) g_hash_table_ref, NULL);
 
-    g_object_unref (priv->sync_result);
-    priv->sync_result = NULL;
+    g_object_unref (ami->priv->sync_result);
+    ami->priv->sync_result = NULL;
 
     return res;
 }
@@ -100,19 +88,16 @@ wait_queue_status_result (GamiManager *ami,
                           GamiListFinishFunc finish,
                           GError **error)
 {
-    GamiManagerPrivate *priv;
     GSList *res;
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    while (!priv->sync_result)
+    while (! ami->priv->sync_result)
         g_main_context_iteration (NULL, TRUE);
 
-    res = g_slist_copy (finish (ami, priv->sync_result, error));
+    res = g_slist_copy (finish (ami, ami->priv->sync_result, error));
     g_slist_foreach (res, (GFunc) gami_queue_status_entry_ref, NULL);
 
-    g_object_unref (priv->sync_result);
-    priv->sync_result = NULL;
+    g_object_unref (ami->priv->sync_result);
+    ami->priv->sync_result = NULL;
 
     return res;
 }
@@ -257,22 +242,21 @@ send_action_string (GamiManager *ami,
                     const gchar *action,
                     GError **error)
 {
-    GamiManagerPrivate *priv;
     GIOStatus status;
 
     g_assert (error == NULL || *error == NULL);
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
+    do {
+        status = g_io_channel_write_chars (ami->priv->socket,
+                                           action,
+                                           -1, NULL,
+                                           error);
+    } while (G_IO_STATUS_AGAIN == status);
 
-    while (G_IO_STATUS_AGAIN == (status = g_io_channel_write_chars (priv->socket,
-                                                                    action,
-                                                                    -1,
-                                                                    NULL,
-                                                                    error)));
-    g_log (priv->log_domain, GAMI_LOG_LEVEL_NET_TX, "%s", action);
+    g_log (ami->priv->log_domain, GAMI_LOG_LEVEL_NET_TX, "%s", action);
 
     if (status != G_IO_STATUS_ERROR)
-        while (G_IO_STATUS_AGAIN == g_io_channel_flush (priv->socket,
+        while (G_IO_STATUS_AGAIN == g_io_channel_flush (ami->priv->socket,
                                                         error));
 }
 
@@ -294,21 +278,20 @@ setup_action_hook (GamiManager *ami,
         g_error_free (error);
         g_free (action_id);
     } else {
-        GamiManagerPrivate *priv;
         GHook *action_hook;
         GamiHookData *hook_data;
 
-        priv = GAMI_MANAGER_PRIVATE (ami);
         GSimpleAsyncResult *simple = g_simple_async_result_new (G_OBJECT (ami),
                                                                 callback,
                                                                 user_data,
                                                                 func);
-        action_hook = g_hook_alloc (&priv->packet_hooks);
-        hook_data = gami_hook_data_new (G_ASYNC_RESULT (simple), action_id, handler_data);
+        action_hook = g_hook_alloc (&ami->priv->packet_hooks);
+        hook_data = gami_hook_data_new (G_ASYNC_RESULT (simple),
+                                        action_id, handler_data);
         action_hook->data = hook_data;
         action_hook->func = handler;
         action_hook->destroy = (GDestroyNotify) gami_hook_data_free;
-        g_hook_append (&priv->packet_hooks, action_hook);
+        g_hook_append (&ami->priv->packet_hooks, action_hook);
     }
 }
 
@@ -333,16 +316,13 @@ send_async_action_valist (GamiManager *ami,
                           const gchar *first_param_name,
                           va_list varargs)
 {
-    GamiManagerPrivate *priv;
     gchar *action, *action_id = NULL;
     GError *error = NULL;
 
     g_return_if_fail (GAMI_IS_MANAGER (ami));
     g_return_if_fail (callback != NULL);
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    g_assert (priv->connected);
+    g_assert (ami->priv->connected);
 
     g_debug ("Sending GAMI command");
 
@@ -395,10 +375,7 @@ send_async_action (GamiManager *ami,
 gboolean
 dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *ami)
 {
-    GamiManagerPrivate *priv;
-    GIOStatus           status = G_IO_STATUS_NORMAL;
-
-    priv = GAMI_MANAGER_PRIVATE (ami);
+    GIOStatus status = G_IO_STATUS_NORMAL;
 
     if (cond & (G_IO_IN | G_IO_PRI)) {
         static gsize  buffer_size = 0;
@@ -435,7 +412,8 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *ami)
                                               &bytes_read,
                                               &error);
             response [offset + bytes_read] = '\0';
-            g_log (priv->log_domain, GAMI_LOG_LEVEL_NET_RX,
+
+            g_log (ami->priv->log_domain, GAMI_LOG_LEVEL_NET_RX,
                    "%s", response + offset);
 
         } while (status == G_IO_STATUS_NORMAL);
@@ -447,7 +425,7 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *ami)
 
             packets = g_strsplit (response, "\r\n\r\n", -1);
             for (packet = packets; g_strv_length (packet) > 1; packet++)
-                g_queue_push_tail (priv->packet_buffer,
+                g_queue_push_tail (ami->priv->packet_buffer,
                                    gami_packet_new ((const gchar *) *packet));
             g_strfreev (packets);
 
@@ -472,12 +450,12 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *ami)
                 g_error_free (error);
         }
 
-        if (! g_queue_is_empty (priv->packet_buffer))
+        if (! g_queue_is_empty (ami->priv->packet_buffer))
             g_timeout_add (0, (GSourceFunc) process_packets, ami);
     }
 
     if (cond & (G_IO_HUP | G_IO_ERR) || status == G_IO_STATUS_EOF) {
-        priv->connected = FALSE;
+        ami->priv->connected = FALSE;
         //g_signal_emit (ami, signals [DISCONNECTED], 0);
         //g_idle_add ((GSourceFunc) reconnect_socket, ami);
 
@@ -497,50 +475,38 @@ set_current_packet (GHook *hook, gpointer packet)
 }
 
 gboolean
-process_packets (GamiManager *mgr)
+process_packets (GamiManager *ami)
 {
-    GamiManagerPrivate *priv;
     GamiPacket         *packet;
 
-    priv = GAMI_MANAGER_PRIVATE (mgr);
-
-    if (! (packet = g_queue_pop_head (priv->packet_buffer)))
+    if (! (packet = g_queue_pop_head (ami->priv->packet_buffer)))
         return FALSE;
 
-    g_hook_list_marshal (&priv->packet_hooks,
+    g_hook_list_marshal (&ami->priv->packet_hooks,
                          FALSE,
                          set_current_packet,
                          packet);
-    g_hook_list_invoke_check (&priv->packet_hooks,
+    g_hook_list_invoke_check (&ami->priv->packet_hooks,
                               FALSE);
     gami_packet_free (packet);
 
-    return ! g_queue_is_empty (priv->packet_buffer);
+    return ! g_queue_is_empty (ami->priv->packet_buffer);
 }
 
 void
 set_sync_result (GObject *source, GAsyncResult *result, gpointer user_data)
 {
-    GamiManager        *ami;
-    GamiManagerPrivate *priv;
-
-    ami = GAMI_MANAGER (source);
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    priv->sync_result = g_object_ref (result);
+    GAMI_MANAGER (source)->priv->sync_result = g_object_ref (result);
 }
 
 gboolean
 reconnect_socket (GamiManager *ami)
 {
-    GamiManagerPrivate *priv;
     GError *error = NULL;
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    close (g_io_channel_unix_get_fd (priv->socket));
-    g_io_channel_shutdown (priv->socket, TRUE, NULL);
-    g_io_channel_unref (priv->socket);
+    close (g_io_channel_unix_get_fd (ami->priv->socket));
+    g_io_channel_shutdown (ami->priv->socket, TRUE, NULL);
+    g_io_channel_unref (ami->priv->socket);
 
     return ! gami_manager_connect (ami, &error); /* try again if connection
                                                     failed */

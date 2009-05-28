@@ -87,15 +87,16 @@
 typedef struct _GamiManagerNewAsyncData GamiManagerNewAsyncData;
 struct _GamiManagerNewAsyncData {
     const gchar *host;
-    const gchar *port;
+    guint        port;
     GamiManagerNewAsyncFunc func;
     gpointer data;
 };
 
 enum {
-    HOST_PROP = 1,
-    PORT_PROP,
-    LOG_DOMAIN_PROP
+    PROP_0,
+    PROP_HOST,
+    PROP_PORT,
+    PROP_LOG_DOMAIN
 };
 
 G_DEFINE_TYPE (GamiManager, gami_manager, G_TYPE_OBJECT);
@@ -125,18 +126,17 @@ static void join_user_event_headers (gchar *key, gchar *value, GString *s);
  * Returns: A new #GamiManager
  */
 GamiManager *
-gami_manager_new (const gchar *host, const gchar *port)
+gami_manager_new (const gchar *host, guint port)
 {
     GamiManager *ami;
-    GamiManagerPrivate *priv;
     GHook *parser, *events;
     GError  *error = NULL;
 
-    ami = g_object_new (GAMI_TYPE_MANAGER,
-                        "host", host,
-                        "port", port,
-                        NULL);
-    priv = GAMI_MANAGER_PRIVATE (ami);
+	ami = g_object_new (GAMI_TYPE_MANAGER,
+	                    "host", host,
+	                    "port", port,
+	                    "log_domain", G_LOG_DOMAIN,
+	                    NULL);
 
     if (! gami_manager_connect (ami, &error)) {
         g_warning ("Failed to connect to the server%s%s",
@@ -147,17 +147,17 @@ gami_manager_new (const gchar *host, const gchar *port)
         return NULL;
     }
 
-    parser = g_hook_alloc (&priv->packet_hooks);
+    parser = g_hook_alloc (&ami->priv->packet_hooks);
     parser->func = parse_packet;
     parser->data = gami_hook_data_new (NULL, NULL, NULL);
     parser->destroy = (GDestroyNotify) gami_hook_data_free;
-    g_hook_append (&priv->packet_hooks, parser);
+    g_hook_append (&ami->priv->packet_hooks, parser);
 
-    events = g_hook_alloc (&priv->packet_hooks);
+    events = g_hook_alloc (&ami->priv->packet_hooks);
     events->func = emit_event;
     events->data = gami_hook_data_new (NULL, NULL, ami);
     events->destroy = (GDestroyNotify) gami_hook_data_free;
-    g_hook_append (&priv->packet_hooks, events);
+    g_hook_append (&ami->priv->packet_hooks, events);
 
     return ami;
 }
@@ -173,7 +173,7 @@ gami_manager_new (const gchar *host, const gchar *port)
  * object will be passed as a parameter to @func when finished.
  */
 void
-gami_manager_new_async (const gchar *host, const gchar *port,
+gami_manager_new_async (const gchar *host, guint port,
                         GamiManagerNewAsyncFunc func, gpointer user_data)
 {
     GamiManagerNewAsyncData *data;
@@ -207,26 +207,26 @@ gami_manager_new_async (const gchar *host, const gchar *port,
 gboolean
 gami_manager_connect (GamiManager *ami, GError **error)
 {
-    GamiManagerPrivate *priv;
     struct addrinfo     hints;
     struct addrinfo    *rp,
                        *result = NULL;
+    gchar              *port;
     int                 s;
 
     SOCKET sock = INVALID_SOCKET;
 
     g_assert (error == NULL || *error == NULL);
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
     memset (&hints, 0, sizeof (struct addrinfo));
     hints.ai_family   = AF_UNSPEC;
     hints.ai_socktype = SOCK_STREAM;
     hints.ai_protocol = IPPROTO_TCP;
 
-    if ((s = getaddrinfo (priv->host, priv->port, &hints, &result)) != 0)
-        g_warning ("Error resolving host '%s': %s", priv->host,
-                   gai_strerror (s));
+	port = g_strdup_printf ("%u", ami->priv->port);
+	if ((s = getaddrinfo (ami->priv->host, port, &hints, &result)) != 0)
+		g_warning ("Error resolving host '%s': %s", ami->priv->host,
+		           gai_strerror (s));
+	g_free (port);
 
     for (rp = result; rp; rp = rp->ai_next) {
         sock = socket (rp->ai_family, rp->ai_socktype, rp->ai_protocol);
@@ -250,18 +250,18 @@ gami_manager_connect (GamiManager *ami, GError **error)
     }
 
 
-    priv->socket = G_SOCKET_IO_CHANNEL_NEW (sock);
+    ami->priv->socket = G_SOCKET_IO_CHANNEL_NEW (sock);
 
     if (parse_connection_string (ami, error)) {
-        priv->connected = TRUE;
+        ami->priv->connected = TRUE;
         g_signal_emit (ami, signals [CONNECTED], 0);
     }
 
-    g_io_channel_set_flags (priv->socket, G_IO_FLAG_NONBLOCK, error);
-    g_io_add_watch (priv->socket, G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
+    g_io_channel_set_flags (ami->priv->socket, G_IO_FLAG_NONBLOCK, error);
+    g_io_add_watch (ami->priv->socket, G_IO_IN | G_IO_PRI | G_IO_ERR | G_IO_HUP,
                     (GIOFunc) dispatch_ami, ami);
 
-    return priv->connected;
+    return ami->priv->connected;
 }
 
 /**
@@ -6844,16 +6844,13 @@ gami_manager_user_event_async (GamiManager *ami,
                                gpointer user_data)
 {
     /* FIXME: organize the internal API to handle this more gracefully */
-    GamiManagerPrivate *priv;
     gchar *action, *action_complete = NULL, *action_id_new = NULL;
     GError *error = NULL;
 
     g_assert (ami   != NULL && GAMI_IS_MANAGER (ami));
     g_assert (user_event != NULL);
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    g_assert (priv->connected == TRUE);
+    g_assert (ami->priv->connected == TRUE);
 
     action = build_action_string ("UserEvent",
                                   &action_id_new,
@@ -7010,7 +7007,6 @@ gami_manager_new_async_cb (GamiManagerNewAsyncData *data)
 static gboolean
 parse_connection_string (GamiManager *ami, GError **error)
 {
-    GamiManagerPrivate *priv;
     GIOStatus status;
     /* read welcome message and set API */
     gchar   *welcome_message;
@@ -7019,9 +7015,7 @@ parse_connection_string (GamiManager *ami, GError **error)
     g_assert (ami != NULL && GAMI_IS_MANAGER (ami));
     g_assert (error == NULL || *error == NULL);
 
-    priv = GAMI_MANAGER_PRIVATE (ami);
-
-    status = g_io_channel_read_line (priv->socket, &welcome_message,
+    status = g_io_channel_read_line (ami->priv->socket, &welcome_message,
                      NULL, NULL, error);
 
     if (status != G_IO_STATUS_NORMAL) {
@@ -7123,37 +7117,46 @@ static void join_user_event_headers (gchar *key, gchar *value, GString *s)
  */
 
 static void
-gami_manager_init (GamiManager *object)
+gami_manager_init (GamiManager *ami)
 {
-    GamiManagerPrivate *priv;
+    ami->priv = GAMI_MANAGER_GET_PRIVATE (ami);
+    ami->priv->connected = FALSE;
+    ami->priv->packet_buffer = g_queue_new ();
+    g_hook_list_init (&ami->priv->packet_hooks, sizeof (GHook));
+}
 
-    priv = GAMI_MANAGER_PRIVATE (object);
-    priv->connected = FALSE;
-    priv->packet_buffer = g_queue_new ();
-    g_hook_list_init (&priv->packet_hooks, sizeof (GHook));
+static void
+gami_manager_dispose (GObject *object)
+{
+    GamiManager *ami = GAMI_MANAGER (object);
+
+    while (g_source_remove_by_user_data (object))
+        ;
+
+    if (ami->priv->socket) {
+        g_io_channel_shutdown (ami->priv->socket, TRUE, NULL);
+        g_io_channel_unref    (ami->priv->socket);
+    }
+
+    if (ami->priv->sync_result)
+        g_object_unref (ami->priv->sync_result);
+
+    G_OBJECT_CLASS (gami_manager_parent_class)->dispose (object);
 }
 
 static void
 gami_manager_finalize (GObject *object)
 {
-    GamiManagerPrivate *priv;
+    GamiManager *ami = GAMI_MANAGER (object);
 
-    priv = GAMI_MANAGER_PRIVATE (object);
+    g_queue_foreach (ami->priv->packet_buffer, (GFunc) gami_packet_free, NULL);
+    g_queue_free (ami->priv->packet_buffer);
 
-    while (g_source_remove_by_user_data (object));
+    g_hook_list_clear (&ami->priv->packet_hooks);
 
-    if (priv->socket) {
-        g_io_channel_shutdown (priv->socket, TRUE, NULL);
-        g_io_channel_unref (priv->socket);
-    }
+    g_free (ami->priv->host);
 
-    g_queue_foreach (priv->packet_buffer, (GFunc) gami_packet_free, NULL);
-    g_queue_free (priv->packet_buffer);
-
-    g_hook_list_clear (&priv->packet_hooks);
-
-    g_free (priv->host);
-    g_free (priv->port);
+    g_free (ami->priv->log_domain);
 
     if (GAMI_MANAGER (object)->api_version)
         g_free ((gchar *) GAMI_MANAGER (object)->api_version);
@@ -7165,18 +7168,17 @@ static void
 gami_manager_get_property (GObject *obj, guint prop_id,
                            GValue *value, GParamSpec *pspec)
 {
-    GamiManager        *gami = (GamiManager *) obj;
-    GamiManagerPrivate *priv = GAMI_MANAGER_PRIVATE (gami);
+    GamiManager *ami = GAMI_MANAGER (obj);
 
     switch (prop_id) {
-        case HOST_PROP:
-            g_value_set_string (value, priv->host);
+        case PROP_HOST:
+            g_value_set_string (value, ami->priv->host);
             break;
-        case PORT_PROP:
-            g_value_set_string (value, priv->port);
+        case PROP_PORT:
+            g_value_set_uint (value, ami->priv->port);
             break;
-        case LOG_DOMAIN_PROP:
-            g_value_set_string (value, priv->log_domain);
+        case PROP_LOG_DOMAIN:
+            g_value_set_string (value, ami->priv->log_domain);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (obj, prop_id, pspec);
@@ -7188,21 +7190,19 @@ static void
 gami_manager_set_property (GObject *obj, guint prop_id,
                            const GValue *value, GParamSpec *pspec)
 {
-    GamiManager        *gami = (GamiManager *) obj;
-    GamiManagerPrivate *priv = GAMI_MANAGER_PRIVATE (gami);
+    GamiManager *ami = GAMI_MANAGER (obj);
 
     switch (prop_id) {
-        case HOST_PROP:
-            g_free (priv->host);
-            priv->host = g_value_dup_string (value);
+        case PROP_HOST:
+            g_free (ami->priv->host);
+            ami->priv->host = g_value_dup_string (value);
             break;
-        case PORT_PROP:
-            g_free (priv->port);
-            priv->port = g_value_dup_string (value);
+        case PROP_PORT:
+            ami->priv->port = g_value_get_uint (value);
             break;
-        case LOG_DOMAIN_PROP:
-            g_free (priv->log_domain);
-            priv->log_domain = g_value_dup_string (value);
+        case PROP_LOG_DOMAIN:
+            g_free (ami->priv->log_domain);
+            ami->priv->log_domain = g_value_dup_string (value);
             break;
         default:
             G_OBJECT_WARN_INVALID_PROPERTY_ID (obj, prop_id, pspec);
@@ -7219,6 +7219,7 @@ gami_manager_class_init (GamiManagerClass *klass)
 
     object_class->set_property = gami_manager_set_property;
     object_class->get_property = gami_manager_get_property;
+    object_class->dispose  = gami_manager_dispose;
     object_class->finalize = gami_manager_finalize;
 
     /**
@@ -7227,7 +7228,7 @@ gami_manager_class_init (GamiManagerClass *klass)
      * The Asterisk manager host to connect to
      **/
     g_object_class_install_property (object_class,
-                                     HOST_PROP,
+                                     PROP_HOST,
                                      g_param_spec_string ("host",
                                                           "manager host",
                                                           "manager host",
@@ -7241,13 +7242,15 @@ gami_manager_class_init (GamiManagerClass *klass)
      * The Asterisk manager port to connect to
      **/
     g_object_class_install_property (object_class,
-                                     PORT_PROP,
-                                     g_param_spec_string ("port",
-                                                          "manager port",
-                                                          "manager port",
-                                                          "5038",
-                                                          G_PARAM_CONSTRUCT_ONLY
-                                                          | G_PARAM_READWRITE));
+                                     PROP_PORT,
+                                     g_param_spec_uint ("port",
+                                                        "manager port",
+                                                        "manager port",
+                                                        0,
+                                                        G_MAXUINT,
+                                                        5038,
+                                                        G_PARAM_CONSTRUCT_ONLY
+                                                        | G_PARAM_READWRITE));
 
     /**
      * GamiManager:log_domain:
@@ -7255,7 +7258,7 @@ gami_manager_class_init (GamiManagerClass *klass)
      * The log domain used for network dumps
      **/
     g_object_class_install_property (object_class,
-                                     LOG_DOMAIN_PROP,
+                                     PROP_LOG_DOMAIN,
                                      g_param_spec_string ("log_domain",
                                                           "LogDomain",
                                                           "Custom log domain",

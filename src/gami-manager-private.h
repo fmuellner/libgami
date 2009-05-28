@@ -7,13 +7,12 @@
 #include <gami-manager-types.h>
 #include <gami-error.h>
 
-typedef struct _GamiManagerPrivate GamiManagerPrivate;
 struct _GamiManagerPrivate
 {
     GIOChannel   *socket;
     gboolean      connected;
     gchar        *host;
-    gchar        *port;
+    guint         port;
 
     gchar        *log_domain;
 
@@ -23,7 +22,7 @@ struct _GamiManagerPrivate
     GAsyncResult *sync_result;
 };
 
-#define GAMI_MANAGER_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), \
+#define GAMI_MANAGER_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), \
                                                             GAMI_TYPE_MANAGER, \
                                                             GamiManagerPrivate))
 
