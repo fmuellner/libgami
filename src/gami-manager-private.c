@@ -771,6 +771,7 @@ hash_hook (gpointer data)
 
         g_hash_table_remove (res, "Response");
         g_hash_table_remove (res, "Message");
+        g_hash_table_remove (res, "ActionID");
         g_simple_async_result_set_op_res_gpointer (simple, res, hash_free);
     } else
         g_simple_async_result_set_error (simple,

@@ -611,7 +611,10 @@ gami_manager_setvar_async (GamiManager *ami,
                        "Success",
                        callback,
                        user_data,
-                       "Logoff",
+                       "Setvar",
+					   "Channel", channel,
+					   "Variable", variable,
+					   "Value", value,
                        "ActionID", action_id,
                        NULL);
 }
@@ -6662,9 +6665,10 @@ gami_manager_originate_async (GamiManager *ami,
                       && ami->api_minor) ? (GHFunc) join_originate_vars
                                          : (GHFunc) join_originate_vars_legacy;
     vars = g_string_new ("");
-    g_hash_table_foreach ((GHashTable *) variables,
-                          join_vars_func,
-                          vars);
+	if (variables)
+		g_hash_table_foreach ((GHashTable *) variables,
+							  join_vars_func,
+							  vars);
     svariables = g_string_free (vars, FALSE);
 
     send_async_action (ami,
@@ -6683,7 +6687,7 @@ gami_manager_originate_async (GamiManager *ami,
                        "Timeout", stimeout,
                        "CallerID", caller_id,
                        "Account", account,
-                       "Variable", svariables,
+                       "Variable", variables ? svariables : NULL,
                        "Async", sasync,
                        "ActionID", action_id,
                        NULL);
