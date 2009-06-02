@@ -6869,7 +6869,7 @@ gami_manager_user_event_async (GamiManager *ami,
         g_hash_table_foreach ((GHashTable *) headers,
                               (GHFunc) join_user_event_headers, header);
         header_str = g_string_free (header, FALSE);
-        action_complete = g_strjoin (header_str, action, NULL);
+        action_complete = g_strjoin (NULL, header_str, action, NULL);
         g_free (header_str);
     } else
         action_complete = g_strdup (action);
