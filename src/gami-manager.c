@@ -6684,7 +6684,7 @@ gami_manager_originate_async (GamiManager *ami,
                        priority ? "Context"
                                 : "Data", data_context,
                        "Priority", priority,
-                       "Timeout", stimeout,
+                       "Timeout", timeout ? stimeout : NULL,
                        "CallerID", caller_id,
                        "Account", account,
                        "Variable", variables ? svariables : NULL,
