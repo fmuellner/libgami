@@ -62,15 +62,19 @@ EXTRA_DIST +=                     \
         $(NULL)
 
 gami-enumtypes.h: gami-enumtypes.h.template $(gami_headers)
-	glib-mkenums --template $< $(gami_headers) >$@.tmp && mv $@.tmp $@
+	$(AM_V_GEN) glib-mkenums --template $< $(gami_headers) >$@.tmp && \
+	mv $@.tmp $@
 
 gami-enumtypes.c: gami-enumtypes.c.template $(gami_headers)
-	glib-mkenums --template $< $(gami_headers) >$@.tmp && mv $@.tmp $@
+	$(AM_V_GEN) glib-mkenums --template $< $(gami_headers) >$@.tmp && \
+	mv $@.tmp $@
+
+CLEANFILES = $(BUILT_SOURCES)
 
 if ENABLE_INTROSPECTION
 
 GAmi-1.0.gir: libgami-1.0.la Makefile gami.h
-	$(G_IR_SCANNER) \
+	$(AM_V_GEN)$(G_IR_SCANNER) \
 		--namespace GAmi --nsversion=1.0 \
 		--add-include-path=$(top_srcdir)/src --add-include-path=. \
 		--output $@ \
@@ -98,7 +102,7 @@ DISTCLEANFILES += $(gir_DATA) $(typelib_DATA)
 
 %.typelib: %.gir $(G_IR_COMPILER)
 	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}.libs \
-			$(G_IR_COMPILER) --includedir=$(srcdir) --includedir=. \
+			$(AM_V_GEN)$(G_IR_COMPILER) --includedir=$(srcdir) --includedir=. \
 			$(G_IR_COMPILER_OPTS) $< -o $(builddir)/$(@F)
 
 endif # ENABLE_INTROSPECTION
