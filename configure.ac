@@ -87,43 +87,7 @@ PKG_CHECK_MODULES([GAMI], [glib-2.0 >= $GLIB_REQ gobject-2.0 gio-2.0])
 # GObject Introspection
 ##################################################
 
-AC_MSG_CHECKING([whether GObject introspection is requested])
-AC_ARG_ENABLE([introspection],
-	      AC_HELP_STRING([--enable-introspection],
-			     [Enable GObject introspection]),
-			     [],[enable_introspection=no])
-AC_MSG_RESULT([$enable_introspection])
-
-G_IR_SCANNER=
-G_IR_COMPILER=
-G_IR_GENERATE=
-GIRDIR=
-TYPELIBDIR=
-
-
-if test "$enable_introspection" = "yes";
-then
-  GOBJECT_INTROSPECTION_REQ=0.6.2
-  PKG_CHECK_MODULES([GOBJECT_INTROSPECTION],
-		    [gobject-introspection-1.0 >= $GOBJECT_INTROSPECTION_REQ])
-
-  G_IR_SCANNER=`$PKG_CONFIG --variable=g_ir_scanner gobject-introspection-1.0`
-  G_IR_COMPILER=`$PKG_CONFIG --variable=g_ir_compiler gobject-introspection-1.0`
-  G_IR_GENERATE=`$PKG_CONFIG --variable=g_ir_generate gobject-introspection-1.0`
-  GIRDIR=`$PKG_CONFIG --variable=girdir gobject-introspection-1.0`
-  TYPELIBDIR=`$PKG_CONFIG --variable=typelibdir gobject-introspection-1.0`
-fi
-
-
-AC_SUBST(G_IR_SCANNER)
-AC_SUBST(G_IR_COMPILER)
-AC_SUBST(G_IR_GENERATE)
-AC_SUBST(GIRDIR)
-AC_SUBST(TYPELIBDIR)
-
-
-AM_CONDITIONAL([ENABLE_INTROSPECTION],[test "$enable_introspection" = "yes"])
-
+GOBJECT_INTROSPECTION_CHECK([0.6.3])
 
 ##################################################
 # Check for gtk-doc.

@@ -16,19 +16,19 @@ AM_CFLAGS =                        \
 lib_LTLIBRARIES = libgami-1.0.la
 
 libgami_1_0_la_SOURCES =          \
-        gami-main.c               \
-        gami-main.h               \
-        gami-manager.c            \
-        gami-manager.h            \
-        gami-manager-types.h      \
-        gami-manager-types.c      \
-        gami-manager-private.c    \
-        gami-manager-private.h    \
-        gami-enums.h              \
-        gami-enumtypes.c          \
-        gami-enumtypes.h          \
-        gami-error.c              \
-        gami-error.h              \
+        $(srcdir)/gami-main.c               \
+        $(srcdir)/gami-main.h               \
+        $(srcdir)/gami-manager.c            \
+        $(srcdir)/gami-manager.h            \
+        $(srcdir)/gami-manager-types.h      \
+        $(srcdir)/gami-manager-types.c      \
+        $(srcdir)/gami-manager-private.c    \
+        $(srcdir)/gami-manager-private.h    \
+        $(srcdir)/gami-enums.h              \
+        $(srcdir)/gami-enumtypes.c          \
+        $(srcdir)/gami-enumtypes.h          \
+        $(srcdir)/gami-error.c              \
+        $(srcdir)/gami-error.h              \
         $(NULL)
 
 libgami_1_0_la_LDFLAGS = $(GAMI_LIBS)
@@ -37,23 +37,23 @@ gamiincludedir=$(includedir)/libgami-1.0
 gamiinclude_HEADERS = gami.h
 
 gami_headers =                    \
-	gami-main.h               \
-	gami-manager.h            \
-	gami-manager-types.h      \
-	gami-enums.h              \
-	gami-error.h              \
+	$(srcdir)/gami-main.h               \
+	$(srcdir)/gami-manager.h            \
+	$(srcdir)/gami-manager-types.h      \
+	$(srcdir)/gami-enums.h              \
+	$(srcdir)/gami-error.h              \
 	$(NULL)
 
 gamisubincludedir=$(gamiincludedir)/gami
 gamisubinclude_HEADERS =          \
-	$(gami_headers)           \
-	gami-enumtypes.h          \
+	$(gami_headers)               \
+	$(srcdir)/gami-enumtypes.h    \
 	$(NULL)
 
 
-BUILT_SOURCES =                   \
-        gami-enumtypes.h          \
-        gami-enumtypes.c          \
+BUILT_SOURCES =                    \
+        $(srcdir)/gami-enumtypes.h \
+        $(srcdir)/gami-enumtypes.c \
         $(NULL)
 
 EXTRA_DIST +=                     \
@@ -71,11 +71,11 @@ gami-enumtypes.c: gami-enumtypes.c.template $(gami_headers)
 
 CLEANFILES = $(BUILT_SOURCES)
 
-if ENABLE_INTROSPECTION
+if HAVE_INTROSPECTION
 
-GAmi-1.0.gir: libgami-1.0.la Makefile gami.h
-	$(AM_V_GEN)$(G_IR_SCANNER) \
-		--namespace GAmi --nsversion=1.0 \
+Gami-1.0.gir: libgami-1.0.la Makefile gami.h
+	$(AM_V_GEN)$(INTROSPECTION_SCANNER) \
+		--namespace Gami --nsversion=1.0 \
 		--add-include-path=$(top_srcdir)/src --add-include-path=. \
 		--output $@ \
 		--libtool="$(LIBTOOL)" \
@@ -91,18 +91,22 @@ GAmi-1.0.gir: libgami-1.0.la Makefile gami.h
 		$(top_srcdir)/src/gami.c \
 		$(gamisubinclude_HEADERS)
 
-girdir = $(GIRDIR)
-gir_DATA = GAmi-1.0.gir
+girdir = $(INTROSPECTION_GIRDIR)
+gir_DATA = Gami-1.0.gir
 
-typelibdir = $(TYPELIBDIR)
-typelib_DATA = GAmi-1.0.typelib
+typelibdir = $(INTROSPECTION_TYPELIBDIR)
+typelib_DATA = Gami-1.0.typelib
 
 EXTRA_DIST += $(gir_DATA)
+
+%.typelib: %.gir $(INTROSPECTION_COMPILER)
+	$(AM_V_GEN) \
+	LD_LIBRARY_PATH=.libs$${LD_LIBRARY_PATH:+:$$LD_LIBRARY_PATH} \
+	$(INTROSPECTION_COMPILER) \
+		--includedir=$(srcdir) \
+		--includedir=.  \
+		$(INTROSPECTION_COMPILER_OPTS) $< -o $(@F)
+
 DISTCLEANFILES += $(gir_DATA) $(typelib_DATA)
 
-%.typelib: %.gir $(G_IR_COMPILER)
-	LD_LIBRARY_PATH=$${LD_LIBRARY_PATH:+$$LD_LIBRARY_PATH:}.libs \
-			$(AM_V_GEN)$(G_IR_COMPILER) --includedir=$(srcdir) --includedir=. \
-			$(G_IR_COMPILER_OPTS) $< -o $(builddir)/$(@F)
-
-endif # ENABLE_INTROSPECTION
+endif # HAVE_INTROSPECTION
