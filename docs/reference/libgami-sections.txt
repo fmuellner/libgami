@@ -138,12 +138,12 @@ gami_manager_parked_calls
 gami_manager_parked_calls_async
 gami_manager_parked_calls_finish
 <SUBSECTION Variables>
-gami_manager_get_var
-gami_manager_get_var_async
-gami_manager_get_var_finish
-gami_manager_set_var
-gami_manager_set_var_async
-gami_manager_set_var_finish
+gami_manager_getvar
+gami_manager_getvar_async
+gami_manager_getvar_finish
+gami_manager_setvar
+gami_manager_setvar_async
+gami_manager_setvar_finish
 <SUBSECTION Asterisk DB>
 gami_manager_db_del
 gami_manager_db_del_async
@@ -161,16 +161,16 @@ gami_manager_db_put_finish
 gami_manager_sip_peers
 gami_manager_sip_peers_async
 gami_manager_sip_peers_finish
-gami_manager_sip_show_peer
-gami_manager_sip_show_peer_async
-gami_manager_sip_show_peer_finish
-gami_manager_sip_show_registry
-gami_manager_sip_show_registry_async
-gami_manager_sip_show_registry_finish
+gami_manager_sip_showpeer
+gami_manager_sip_showpeer_async
+gami_manager_sip_showpeer_finish
+gami_manager_sip_showregistry
+gami_manager_sip_showregistry_async
+gami_manager_sip_showregistry_finish
 <SUBSECTION IAX>
-gami_manager_iax_peer_list
-gami_manager_iax_peer_list_async
-gami_manager_iax_peer_list_finish
+gami_manager_iax_peerlist
+gami_manager_iax_peerlist_async
+gami_manager_iax_peerlist_finish
 <SUBSECTION Dahdi>
 gami_manager_dahdi_dial_offhook
 gami_manager_dahdi_dial_offhook_async
@@ -281,6 +281,7 @@ gami_manager_create_config
 gami_manager_create_config_async
 gami_manager_create_config_finish
 <SUBSECTION Standard>
+GamiManagerPrivate
 GAMI_MANAGER
 GAMI_IS_MANAGER
 GAMI_TYPE_MANAGER
@@ -310,6 +311,8 @@ gami_queue_status_entry_unref
 <SUBSECTION Standard>
 GAMI_TYPE_QUEUE_STATUS_ENTRY
 gami_queue_status_entry_get_type
+GAMI_TYPE_QUEUE_RULE
+gami_queue_rule_get_type
 </SECTION>
 
 <SECTION>
