@@ -680,6 +680,7 @@ bool_hook (gpointer data)
         g_simple_async_result_set_error (simple,
                                          GAMI_ERROR,
                                          GAMI_ERROR_FAILED,
+                                         "%s",
                                          message ?  message : "Action failed");
 
     g_simple_async_result_complete_in_idle (simple);
@@ -727,6 +728,7 @@ string_hook (gpointer data)
         g_simple_async_result_set_error (simple,
                                          GAMI_ERROR,
                                          GAMI_ERROR_FAILED,
+                                         "%s",
                                          message ?  message : "Action failed");
 
     g_simple_async_result_complete_in_idle (simple);
@@ -777,6 +779,7 @@ hash_hook (gpointer data)
         g_simple_async_result_set_error (simple,
                                          GAMI_ERROR,
                                          GAMI_ERROR_FAILED,
+                                         "%s",
                                          message ?  message : "Action failed");
 
     g_simple_async_result_complete_in_idle (simple);
@@ -815,6 +818,7 @@ list_hook (gpointer data)
             g_simple_async_result_set_error (simple,
                                              GAMI_ERROR,
                                              GAMI_ERROR_FAILED,
+                                             "%s",
                                              message ? message
                                                      : "Action failed");
             return FALSE;
@@ -979,6 +983,7 @@ queue_status_hook (gpointer data)
             g_simple_async_result_set_error (simple,
                                              GAMI_ERROR,
                                              GAMI_ERROR_FAILED,
+                                             "%s",
                                              message ? message
                                                      : "Action failed");
             return FALSE;
