@@ -33,7 +33,7 @@ enum {
     LAST_SIGNAL
 };
 
-static guint signals [LAST_SIGNAL];
+guint signals [LAST_SIGNAL];
 
 typedef struct _GamiPacket GamiPacket;
 struct _GamiPacket {
