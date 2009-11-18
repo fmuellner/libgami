@@ -7151,10 +7151,13 @@ gami_manager_dispose (GObject *object)
     if (ami->priv->socket) {
         g_io_channel_shutdown (ami->priv->socket, TRUE, NULL);
         g_io_channel_unref    (ami->priv->socket);
+        ami->priv->socket = NULL;
     }
 
-    if (ami->priv->sync_result)
+    if (ami->priv->sync_result) {
         g_object_unref (ami->priv->sync_result);
+        ami->priv->sync_result = NULL;
+    }
 
     G_OBJECT_CLASS (gami_manager_parent_class)->dispose (object);
 }
