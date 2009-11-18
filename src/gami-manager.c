@@ -223,9 +223,16 @@ gami_manager_connect (GamiManager *ami, GError **error)
     hints.ai_protocol = IPPROTO_TCP;
 
 	port = g_strdup_printf ("%u", ami->priv->port);
-	if ((s = getaddrinfo (ami->priv->host, port, &hints, &result)) != 0)
-		g_warning ("Error resolving host '%s': %s", ami->priv->host,
-		           gai_strerror (s));
+	if ((s = getaddrinfo (ami->priv->host, port, &hints, &result)) != 0) {
+		g_free (port);
+		g_set_error (error,
+		             G_IO_ERROR,
+		             G_IO_ERROR_HOST_NOT_FOUND,
+		             "Error resolving host '%s': %s",
+		             ami->priv->host,
+		             gai_strerror (s));
+		return FALSE;
+    }
 	g_free (port);
 
     for (rp = result; rp; rp = rp->ai_next) {
@@ -245,6 +252,10 @@ gami_manager_connect (GamiManager *ami, GError **error)
 
     if (rp == NULL) {
         /* Error */
+		g_set_error_literal (error,
+		                     G_IO_ERROR,
+		                     G_IO_ERROR_FAILED,
+		                     "Could not connect to remote host");
 
         return FALSE;
     }
