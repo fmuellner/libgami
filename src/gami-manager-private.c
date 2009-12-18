@@ -790,6 +790,7 @@ hash_hook (gpointer data)
 gboolean
 list_hook (gpointer data)
 {
+    static GSList *list;
     GHashTable *pkt;
     gchar *response, *action_id;
     GSimpleAsyncResult *simple;
@@ -811,6 +812,7 @@ list_hook (gpointer data)
 
         success = ! g_strcmp0 (response, "Success");
         message = g_hash_table_lookup (pkt, "Message");
+        list = NULL;
 
         if (success) {
             return TRUE;
@@ -821,23 +823,22 @@ list_hook (gpointer data)
                                              "%s",
                                              message ? message
                                                      : "Action failed");
+            g_simple_async_result_complete_in_idle (simple);
+
             return FALSE;
         }
 
     } else {
-        GSList *list;
         gchar *event;
         gboolean finished;
         GDestroyNotify list_free = (GDestroyNotify) free_list_result;
 
         event = g_hash_table_lookup (pkt, "Event");
-        list = (GSList *) g_simple_async_result_get_op_res_gpointer (simple);
         finished = ! g_strcmp0 (event, ((GamiHookData *) data)->handler_data);
 
         if (! finished) {
             g_hash_table_remove (pkt, "Event");
             list = g_slist_prepend (list, g_hash_table_ref (pkt));
-            g_simple_async_result_set_op_res_gpointer (simple, list, list_free);
         } else {
             g_simple_async_result_set_op_res_gpointer (simple,
                                                        g_slist_reverse (list),
