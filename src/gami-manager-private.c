@@ -408,7 +408,7 @@ dispatch_ami (GIOChannel *chan, GIOCondition cond, GamiManager *ami)
 
             status = g_io_channel_read_chars (chan,
                                               response + offset,
-                                              channel_buffer_size,
+                                              channel_buffer_size-1,
                                               &bytes_read,
                                               &error);
             response [offset + bytes_read] = '\0';
